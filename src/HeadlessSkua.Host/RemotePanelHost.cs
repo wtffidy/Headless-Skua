@@ -20,6 +20,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private readonly IScriptInterface _bot;
     private readonly IScriptManager _scriptManager;
     private readonly IPluginManager _pluginManager;
+    private readonly HeadlessSessionState _sessionState;
     private readonly HeadlessLogService _logs;
     private readonly bool _remoteEnabled;
     private readonly int _port;
@@ -35,14 +36,16 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// <param name="bot">The initialized Skua script interface.</param>
     /// <param name="scriptManager">The active Skua script manager.</param>
     /// <param name="pluginManager">The initialized Skua plugin manager.</param>
+    /// <param name="sessionState">AQW authentication state received directly from the game server.</param>
     /// <param name="logs">The shared headless log history.</param>
     /// <param name="remoteEnabled">Whether to listen on all network interfaces.</param>
     /// <param name="port">The TCP port used by the dashboard.</param>
-    public RemotePanelHost(IScriptInterface bot, IScriptManager scriptManager, IPluginManager pluginManager, HeadlessLogService logs, bool remoteEnabled, int port)
+    public RemotePanelHost(IScriptInterface bot, IScriptManager scriptManager, IPluginManager pluginManager, HeadlessSessionState sessionState, HeadlessLogService logs, bool remoteEnabled, int port)
     {
         _bot = bot;
         _scriptManager = scriptManager;
         _pluginManager = pluginManager;
+        _sessionState = sessionState;
         _logs = logs;
         _remoteEnabled = remoteEnabled;
         _port = port is >= 1 and <= 65535 ? port : throw new ArgumentOutOfRangeException(nameof(port));
@@ -135,11 +138,13 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private IResult GetStatus()
     {
-        bool loggedIn = _bot.Player.LoggedIn;
+        (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
+        bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
         bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
-        bool alive = loggedIn && worldLoaded && _bot.Player.Alive;
+        bool alive = worldLoaded && _bot.Player.Alive;
         bool connected = loggedIn && worldLoaded && alive;
-        string? account = loggedIn ? _bot.Player.Username : null;
+        string? playerAccount = loggedIn ? _bot.Player.Username : null;
+        string? account = string.IsNullOrWhiteSpace(playerAccount) ? acceptedAccount : playerAccount;
         string runtime = !loggedIn
             ? "Not logged in"
             : !worldLoaded
@@ -162,6 +167,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             connected,
             loggedIn,
             loginState = loggedIn ? "Accepted" : "Waiting",
+            loginSource = loginAccepted ? "AQW login response" : "Skua player state",
             account,
             alive,
             worldLoaded,
@@ -262,9 +268,20 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// Checks the authoritative AQW login response and Skua's world/avatar readiness flags.
+    /// </summary>
+    /// <returns>True when the character is loaded and alive.</returns>
+    private bool IsGameReady()
+    {
+        (bool loginAccepted, _) = _sessionState.GetSnapshot();
+        bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
+        return loggedIn && _bot.Flash.IsWorldLoaded && _bot.Player.Alive;
+    }
+
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
     {
-        if (!_bot.Player.LoggedIn || !_bot.Player.Alive || !_bot.Flash.IsWorldLoaded)
+        if (!IsGameReady())
             return Results.Conflict(new { error = "AQW is not ready. Finish login, wait for the game world, and make sure your character is alive." });
         if (_scriptManager.ScriptRunning)
             return Results.Conflict(new { error = "A script is already running." });
@@ -344,7 +361,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private IResult StartButler(ButlerStartRequest request)
     {
-        if (!_bot.Player.LoggedIn || !_bot.Player.Alive || !_bot.Flash.IsWorldLoaded)
+        if (!IsGameReady())
             return Results.Conflict(new { error = "AQW is not ready. Finish login, wait for the game world, and make sure your character is alive." });
         if (string.IsNullOrWhiteSpace(request.Username))
             return Results.BadRequest(new { error = "Enter the player name Butler should follow." });
