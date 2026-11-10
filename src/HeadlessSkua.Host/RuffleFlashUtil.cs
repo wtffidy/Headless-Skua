@@ -74,6 +74,9 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     {
         try
         {
+            if (ShouldSkipNullTarget(function, args))
+                return type.IsValueType ? Activator.CreateInstance(type) : null;
+
             JsonElement? result = _runtime.CallActionScriptAsync(function, args).GetAwaiter().GetResult();
             return ConvertResult(result, type);
         }
@@ -82,6 +85,31 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             Console.Error.WriteLine($"[Ruffle Call] {function}: {exception.GetType().Name}: {exception.Message}");
             return type.IsValueType ? Activator.CreateInstance(type) : null;
         }
+    }
+
+    /// <summary>
+    /// Avoids ActionScript null-reference errors when Skua writes to UI objects that have not been created yet.
+    /// </summary>
+    /// <param name="function">The ActionScript function being called.</param>
+    /// <param name="args">Arguments supplied to the function.</param>
+    /// <returns>True when the target object path is currently unavailable.</returns>
+    private bool ShouldSkipNullTarget(string function, object[] args)
+    {
+        if (args.Length == 0 || args[0] is not string path)
+            return false;
+
+        string? targetPath = function switch
+        {
+            "setGameObject" => path[..Math.Max(0, path.LastIndexOf('.'))],
+            "setGameObjectKey" or "setArrayObject" => path,
+            _ => null
+        };
+
+        if (string.IsNullOrWhiteSpace(targetPath))
+            return false;
+
+        JsonElement? result = _runtime.CallActionScriptAsync("isNull", new object[] { targetPath }).GetAwaiter().GetResult();
+        return ConvertResult(result, typeof(bool)) is true;
     }
 
     /// <inheritdoc />
