@@ -425,12 +425,60 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             return ConvertJsonElement(value);
 
         if (targetType == typeof(bool))
-            return value.ValueKind == JsonValueKind.True || (value.ValueKind == JsonValueKind.String && bool.TryParse(value.GetString(), out bool parsed) && parsed);
+        {
+            if (value.ValueKind == JsonValueKind.True)
+                return true;
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                string? booleanText = value.GetString();
+                if (bool.TryParse(booleanText, out bool parsedBoolean))
+                    return parsedBoolean;
+
+                if (double.TryParse(booleanText, NumberStyles.Float, CultureInfo.InvariantCulture, out double numericBoolean))
+                    return numericBoolean != 0;
+            }
+
+            return false;
+        }
 
         if (targetType.IsEnum)
-            return Enum.Parse(targetType, value.ToString(), true);
+        {
+            string enumValue = value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : value.ToString();
+            return Enum.Parse(targetType, enumValue, true);
+        }
 
-        return JsonSerializer.Deserialize(value.GetRawText(), targetType, JsonOptions);
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            string? stringValue = value.GetString();
+            if (string.IsNullOrWhiteSpace(stringValue) || string.Equals(stringValue, "null", StringComparison.OrdinalIgnoreCase) || string.Equals(stringValue, "undefined", StringComparison.OrdinalIgnoreCase))
+                return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
+
+            if (targetType == typeof(int) && int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int integer))
+                return integer;
+
+            if (targetType == typeof(long) && long.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out long longInteger))
+                return longInteger;
+
+            if (targetType == typeof(double) && double.TryParse(stringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleValue))
+                return doubleValue;
+
+            if (targetType == typeof(float) && float.TryParse(stringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatValue))
+                return floatValue;
+
+            if (targetType == typeof(decimal) && decimal.TryParse(stringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal decimalValue))
+                return decimalValue;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(value.GetRawText(), targetType, JsonOptions);
+        }
+        catch (JsonException exception)
+        {
+            Console.Error.WriteLine($"[Ruffle Result] {targetType.Name} conversion failed for JSON {value.ValueKind} ({value.GetRawText().Length} characters): {exception.Message}");
+            return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
+        }
     }
 
     /// <summary>
