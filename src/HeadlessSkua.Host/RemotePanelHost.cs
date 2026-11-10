@@ -8,6 +8,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using Skua.Core.Interfaces;
 using Skua.Core.Models;
+using Skua.Headless.UI;
 
 namespace HeadlessSkua;
 
