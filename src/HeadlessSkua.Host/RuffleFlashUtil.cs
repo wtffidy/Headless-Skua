@@ -111,7 +111,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             JsonElement? result = _runtime.CallActionScriptAsync(function, args).GetAwaiter().GetResult();
             object? converted = ConvertResult(result, type);
             if (cacheKey is not null)
-                _readCallCache[cacheKey] = new CachedCall(now + cacheDurationMilliseconds, converted);
+                _readCallCache[cacheKey] = new CachedCall(Environment.TickCount64 + cacheDurationMilliseconds, converted);
 
             FlushDeferredModuleCalls();
             return converted;
@@ -253,6 +253,8 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         else if (function == "isKicked" && args.Length == 0)
             durationMilliseconds = 200;
         else if (function == "isNull" && path is "world" or "world.myAvatar" or "mcLogin.warning" or "mcConnDetail.stage" or "mcLogin.sl.iList")
+            durationMilliseconds = 75;
+        else if (function == "getGameObjectS" && path == "serverIP")
             durationMilliseconds = 75;
         else if (function == "getGameObject" && path is
             "mcLogin.visible"
