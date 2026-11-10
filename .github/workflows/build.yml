@@ -114,6 +114,9 @@ jobs:
             if ($null -eq $status.PSObject.Properties["butlerAvailable"]) {
               throw "The panel status response is missing Butler availability."
             }
+            if ($status.scriptReady -ne $false) {
+              throw "The unauthenticated panel did not report script readiness as false."
+            }
 
             $scriptsResponse = $client.GetAsync("http://127.0.0.1:8788/api/scripts").GetAwaiter().GetResult()
             if (-not $scriptsResponse.IsSuccessStatusCode) {
@@ -132,8 +135,8 @@ jobs:
             $scriptBody = [System.Net.Http.StringContent]::new('{"path":"C:/HeadlessSmoke/missing.cs"}', [System.Text.Encoding]::UTF8, "application/json")
             $scriptResponse = $client.PostAsync("http://127.0.0.1:8788/api/script/start", $scriptBody).GetAwaiter().GetResult()
             $scriptError = $scriptResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-            if ([int]$scriptResponse.StatusCode -ne 409 -or $scriptError -notmatch "AQW is not ready") {
-              throw "The panel script API did not return the expected not-connected response: $scriptError"
+            if ([int]$scriptResponse.StatusCode -ne 409 -or $scriptError -notmatch "AQW is still initializing") {
+              throw "The panel script API did not return the expected not-ready response: $scriptError"
             }
 
             $butlerBody = [System.Net.Http.StringContent]::new('{"username":"HeadlessSmokeTarget","duration":null}', [System.Text.Encoding]::UTF8, "application/json")
