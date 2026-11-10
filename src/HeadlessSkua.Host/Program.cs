@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using Skua.Core.Interfaces;
+using Skua.Headless.UI;
 
 namespace HeadlessSkua;
 
@@ -17,6 +18,9 @@ internal static class Program
     /// <returns>A process exit code indicating success or failure.</returns>
     private static async Task<int> Main(string[] args)
     {
+        HeadlessConsole.Init(args);
+        HeadlessConsole.Banner(Version);
+
         if (args.Length == 0 || args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
             PrintHelp();
@@ -104,9 +108,9 @@ internal static class Program
             };
 
             await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
-            Console.WriteLine("Waiting for the Skua ActionScript client to initialize...");
+            HeadlessConsole.Info("Waiting for the Skua ActionScript client to initialize...");
             await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
-            Console.WriteLine("Skua ActionScript client initialized.");
+            HeadlessConsole.Success("Skua ActionScript client initialized.");
 
             ServiceCollection services = new();
             services.AddHeadlessSkua(flash);
@@ -123,8 +127,11 @@ internal static class Program
 
             // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
             // rather than halfway through an unattended script.
-            serviceProvider.GetRequiredService<IScriptInterface>();
+            IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+
+            if (!await HeadlessLoginFlow.LoginAsync(scriptInterface, cancellationTokenSource.Token))
+                return 4;
 
             string? butlerTarget = GetOption(args, "--butler");
             if (!string.IsNullOrWhiteSpace(butlerTarget))
@@ -137,7 +144,7 @@ internal static class Program
                 if (!File.Exists(fullScriptPath))
                     throw new FileNotFoundException("The requested Skua script was not found.", fullScriptPath);
 
-                Console.WriteLine($"Starting script: {fullScriptPath}");
+                HeadlessConsole.Info($"Starting script: {fullScriptPath}");
                 scriptManager.SetLoadedScript(fullScriptPath);
 
                 scriptManager.SilentConfig = true;
@@ -172,18 +179,18 @@ internal static class Program
                 return 0;
             }
 
-            Console.WriteLine("Headless game runtime ready. Press Ctrl+C to stop.");
+            HeadlessConsole.Success("Headless game runtime ready. Press Ctrl+C to stop.");
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
             return 0;
         }
         catch (OperationCanceledException) when (cancellationTokenSource.IsCancellationRequested)
         {
-            Console.WriteLine("Stopping Headless Skua...");
+            HeadlessConsole.Warn("Stopping Headless Skua...");
             return 0;
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"Headless Skua failed: {exception.Message}");
+            HeadlessConsole.Error($"Headless Skua failed: {exception.Message}");
             return 2;
         }
         finally
