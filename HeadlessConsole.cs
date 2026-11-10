@@ -118,15 +118,15 @@ public sealed class Spinner : IDisposable
 internal static class HeadlessLogRedactor
 {
     private static readonly Regex LoginPayloadRegex = new(
-        @"<login\\b[^>]*>.*?</login\\s*>",
+        @"<login\b[^>]*>.*?</login\s*>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     private static readonly Regex PasswordTagRegex = new(
-        @"(<(?:pword|password|passwd)\\b[^>]*>).*?(</(?:pword|password|passwd)\\s*>)",
+        @"(<(?:pword|password|passwd)\b[^>]*>).*?(</(?:pword|password|passwd)\s*>)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     private static readonly Regex JsonPasswordRegex = new(
-        @"([""'](?:password|pword|passwd)[""']\\s*:\\s*[""'])(.*?)([""'])",
+        @"([""'](?:password|pword|passwd)[""']\s*:\s*[""'])(.*?)([""'])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     /// <summary>
