@@ -41,7 +41,9 @@ internal static class HeadlessServices
         services.AddSingleton<ScriptManager>();
         services.AddSingleton<IScriptManager>(provider => provider.GetRequiredService<ScriptManager>());
         services.AddSingleton<IScriptStatus>(provider => provider.GetRequiredService<ScriptManager>());
-        services.AddSingleton<IScriptInterface, ScriptInterface>();
+        services.AddSingleton<ScriptInterface>();
+        services.AddSingleton<IScriptInterface>(provider => provider.GetRequiredService<ScriptInterface>());
+        services.AddSingleton<IScriptInterfaceManager>(provider => provider.GetRequiredService<ScriptInterface>());
 
         services.AddSingleton<IScriptInventoryHelper, ScriptInventoryHelper>();
         services.AddSingleton<IScriptInventory, ScriptInventory>();
