@@ -111,6 +111,7 @@ internal static class Program
     /// <returns>A process exit code indicating whether the session started successfully.</returns>
     private static async Task<int> RunAsync(string[] args)
     {
+        Stopwatch startupTimer = Stopwatch.StartNew();
         string runtimeDirectory = GetOption(args, "--runtime-dir") ?? GetDefaultRuntimeDirectory();
         string swfPath = GetOption(args, "--swf") ?? Path.Combine(runtimeDirectory, "game", "skua.swf");
         using CancellationTokenSource cancellationTokenSource = new();
@@ -202,9 +203,10 @@ internal static class Program
             };
 
             await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
+            HeadlessConsole.Info($"Ruffle browser started in {startupTimer.Elapsed.TotalSeconds:F1}s.");
             HeadlessConsole.Info("Waiting for the Skua ActionScript client to initialize...");
             await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
-            HeadlessConsole.Success("Skua ActionScript client initialized.");
+            HeadlessConsole.Success($"Skua ActionScript client initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
             ServiceCollection services = new();
             services.AddHeadlessSkua(flash);
@@ -226,7 +228,7 @@ internal static class Program
                 // rather than halfway through an unattended script.
                 IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
                 serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
-                HeadlessConsole.Success("Skua game-state services initialized.");
+                HeadlessConsole.Success($"Skua game-state services initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
                 IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
 
@@ -243,6 +245,7 @@ internal static class Program
 
                 if (remotePanel is not null)
                     await remotePanel.StartAsync(cancellationTokenSource.Token);
+                HeadlessConsole.Info($"Headless startup completed in {startupTimer.Elapsed.TotalSeconds:F1}s. Waiting for account login.");
 
                 if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
                     && !await HeadlessLoginFlow.LoginAsync(scriptInterface, sessionState, cancellationTokenSource.Token))
