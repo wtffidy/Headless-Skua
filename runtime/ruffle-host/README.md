@@ -7,10 +7,10 @@ This folder contains the browser-side runtime shell used by the standalone .NET 
 Run the installer from PowerShell:
 
 ```powershell
-.\Install-Runtime.ps1 -SwfPath "C:\path\to\VibeSkua\Skua.AS3\skua\bin\skua.swf"
+.\Install-Runtime.ps1
 ```
 
-The script downloads the pinned Ruffle Web self-hosted release and copies the supplied SWF into the local runtime folder. To use another Ruffle release, pass `-Version`.
+The script downloads the pinned Ruffle Web self-hosted release and copies the compiled Skua SWF from the VibeSkua submodule into the local runtime folder. To use a different SWF, pass `-SwfPath`; to use another Ruffle release, pass `-Version`.
 
 Expected layout:
 
