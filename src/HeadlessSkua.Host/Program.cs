@@ -145,6 +145,10 @@ internal static class Program
                         if (!string.IsNullOrWhiteSpace(packetType)
                             && LoggedPacketTypes.TryAdd($"{direction}:{packetType}", 0))
                             HeadlessConsole.Debug($"AQW {direction} packet type: {packetType} ({System.Text.Encoding.UTF8.GetByteCount(packet)} bytes).");
+
+                        if (direction == "client" && TryGetTransferMap(packet, out string? targetMap)
+                            && LoggedPacketTypes.TryAdd($"client:transfer:{targetMap}", 0))
+                            HeadlessConsole.Info($"AQW map transfer requested: {targetMap}.");
                     }
                 }
                 if ((string.Equals(name, "packetFromServer", StringComparison.OrdinalIgnoreCase)
@@ -348,6 +352,33 @@ internal static class Program
 
         int separator = packet.IndexOf('%');
         return separator > 0 ? packet[..separator].Trim() : null;
+    }
+
+    /// <summary>
+    /// Extracts a map transfer target without logging account names, room numbers, or packet contents.
+    /// </summary>
+    /// <param name="packet">The outbound AQW packet.</param>
+    /// <param name="targetMap">The normalized map name, when the packet is a transfer.</param>
+    /// <returns>True when the packet requests a map transfer.</returns>
+    private static bool TryGetTransferMap(string packet, out string? targetMap)
+    {
+        targetMap = null;
+        string[] fields = packet.Split('%');
+        if (fields.Length < 9
+            || !string.Equals(fields[1], "xt", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(fields[2], "zm", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(fields[3], "cmd", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(fields[5], "tfer", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(fields[7]))
+            return false;
+
+        string map = fields[7];
+        int suffix = map.LastIndexOf('-');
+        if (suffix > 0 && int.TryParse(map[(suffix + 1)..], out _))
+            map = map[..suffix];
+
+        targetMap = map;
+        return true;
     }
 
     /// <summary>
