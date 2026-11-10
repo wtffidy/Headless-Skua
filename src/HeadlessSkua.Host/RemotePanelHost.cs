@@ -243,10 +243,16 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             bool loggedIn = loginAccepted || TryReadStatusValue("player login", () => _bot.Player.LoggedIn, false, warnedStatusFields);
             string? server = TryReadStatusValue<string?>("server", () => _bot.Servers.LastName, null, warnedStatusFields);
             bool worldLoaded = loggedIn && TryReadStatusValue("game world", () => _bot.Flash.IsWorldLoaded, false, warnedStatusFields);
-            bool avatarLoaded = worldLoaded && TryReadStatusValue("character avatar", IsLocalAvatarPresent, false, warnedStatusFields);
+            bool myAvatarAssigned = worldLoaded && TryReadStatusValue(
+                "local avatar reference",
+                () => !_bot.Flash.IsNull("world.myAvatar"),
+                false,
+                warnedStatusFields);
+            bool avatarLoaded = worldLoaded && (myAvatarAssigned
+                || TryReadStatusValue("local avatar collection", IsLocalAvatarInCollection, false, warnedStatusFields));
             string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
                 ? acceptedAccount
-                : worldLoaded ? TryReadStatusValue<string?>("account", () => _bot.Player.Username, null, warnedStatusFields) : null;
+                : myAvatarAssigned ? TryReadStatusValue<string?>("account", () => _bot.Player.Username, null, warnedStatusFields) : null;
 
             // Publish the authoritative login/world/avatar milestones before querying
             // inventory, assets, health, or map details. Those deeper reads can lag behind
@@ -268,7 +274,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             lock (_statusSync)
                 _statusSnapshot = baseSnapshot;
 
-            if (avatarLoaded)
+            if (myAvatarAssigned)
             {
                 bool playerLoaded = TryReadStatusValue("player readiness", () => _bot.Player.Loaded, false, warnedStatusFields);
                 bool alive = TryReadStatusValue("player alive state", () => _bot.Player.Alive, false, warnedStatusFields);
@@ -310,11 +316,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// isMyAvatar marker when AQW populates world.avatars before assigning myAvatar.
     /// </summary>
     /// <returns>True when the local character exists in the current world.</returns>
-    private bool IsLocalAvatarPresent()
+    private bool IsLocalAvatarInCollection()
     {
-        if (!_bot.Flash.IsNull("world.myAvatar"))
-            return true;
-
         List<bool> localAvatarFlags = _bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
         return localAvatarFlags.Contains(true);
     }
