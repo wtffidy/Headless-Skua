@@ -197,7 +197,7 @@
         byId("loginState").className = status.loggedIn ? "good" : "wait";
         byId("worldState").textContent = status.worldState || (status.worldLoaded ? "Loaded" : "Waiting");
         byId("worldState").className = status.worldLoaded ? "good" : "wait";
-        byId("characterState").textContent = status.alive ? "Alive" : status.avatarLoaded ? "Not alive" : "Pending";
+        byId("characterState").textContent = !status.avatarLoaded ? "Pending" : !status.playerLoaded ? "Loading" : status.alive ? "Alive" : "Not alive";
         byId("characterState").className = status.alive ? "good" : "wait";
         byId("serverName").textContent = status.server || "—";
         byId("scriptState").textContent = status.scriptRunning ? "Running" : "Idle";
