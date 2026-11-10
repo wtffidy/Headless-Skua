@@ -241,8 +241,7 @@ var game:* = Main.instance.getGame();
 '@
     $combatContent = $combatContent.Replace($infiniteRangeBefore, $infiniteRangeAfter)
 
-    if ([string]::Equals($worldContentBeforePatch, $worldContent, [StringComparison]::Ordinal)
-        -or [string]::Equals($combatContentBeforePatch, $combatContent, [StringComparison]::Ordinal)) {
+    if (([string]::Equals($worldContentBeforePatch, $worldContent, [StringComparison]::Ordinal)) -or ([string]::Equals($combatContentBeforePatch, $combatContent, [StringComparison]::Ordinal))) {
         Write-Warning "The Skua gameplay guards did not match the expected source; using the existing compiled client."
         return $false
     }
