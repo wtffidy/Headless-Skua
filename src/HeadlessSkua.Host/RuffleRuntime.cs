@@ -503,7 +503,9 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             Args = new[]
             {
                 "--disable-dev-shm-usage",
-                "--disable-web-security"
+                "--disable-web-security",
+                "--enable-unsafe-swiftshader",
+                "--log-level=3"
             }
         });
 
@@ -530,6 +532,13 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         {
             if (!HeadlessConsole.Quiet)
                 HeadlessConsole.Warn($"[Network] {request.Method} {request.Url}: {request.Failure}");
+        };
+        _page.Response += (_, response) =>
+        {
+            if (response.Status == 404 && !HeadlessConsole.Quiet)
+                HeadlessConsole.Warn($"[Network] Missing resource (404): {response.Request.Method} {response.Url}");
+            else if (response.Status >= 500 && !HeadlessConsole.Quiet)
+                HeadlessConsole.Warn($"[Network] Server error ({response.Status}): {response.Request.Method} {response.Url}");
         };
 
         await _page.ExposeBindingAsync<string, JsonElement, object?>(
