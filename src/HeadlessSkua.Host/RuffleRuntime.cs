@@ -91,7 +91,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         if (!string.Equals(fullSwfPath, Path.GetFullPath(localSwfPath), StringComparison.OrdinalIgnoreCase))
             File.Copy(fullSwfPath, localSwfPath, true);
 
-        Uri playerUri = new(new Uri(address), "?swf=game/skua.swf");
+        string playerQuery = HeadlessConsole.Quiet
+            ? "?swf=game/skua.swf&quiet=1"
+            : "?swf=game/skua.swf";
+        Uri playerUri = new(new Uri(address), playerQuery);
 
         HeadlessConsole.Debug($"Runtime page: {playerUri}");
         await _page!.GotoAsync(playerUri.ToString(), new PageGotoOptions
@@ -512,6 +515,9 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         _page.Console += (_, message) =>
         {
+            if (HeadlessConsole.Quiet)
+                return;
+
             TerminalLogLevel level = message.Type switch
             {
                 "error" => TerminalLogLevel.Error,
@@ -522,9 +528,15 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             HeadlessConsole.Log(level, $"[Browser] {message.Text}");
         };
         _page.PageError += (_, message) =>
-            HeadlessConsole.Error($"[Browser] {message}");
+        {
+            if (!HeadlessConsole.Quiet)
+                HeadlessConsole.Error($"[Browser] {message}");
+        };
         _page.RequestFailed += (_, request) =>
-            HeadlessConsole.Warn($"[Network] {request.Method} {request.Url}: {request.Failure}");
+        {
+            if (!HeadlessConsole.Quiet)
+                HeadlessConsole.Warn($"[Network] {request.Method} {request.Url}: {request.Failure}");
+        };
 
         await _page.ExposeBindingAsync<string, JsonElement, object?>(
             "headlessSkuaHostCall",
