@@ -1,0 +1,3 @@
+[submodule "vendor/VibeSkua"]
+	path = vendor/VibeSkua
+	url = https://github.com/wtffidy/VibeSkua.git
