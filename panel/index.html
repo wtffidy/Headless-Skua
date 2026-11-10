@@ -232,7 +232,7 @@
           .filter(Boolean)
           .join(" ");
         byId("updatedAt").textContent = `Updated ${new Date().toLocaleTimeString()}`;
-        byId("startScript").disabled = !status.connected || status.scriptRunning;
+        byId("startScript").disabled = !status.scriptReady || status.scriptRunning;
         byId("stopScript").disabled = !status.scriptRunning || status.scriptStopping;
         byId("stopScript").textContent = status.scriptStopping ? "Stopping…" : "Stop script";
         byId("startButler").disabled = !status.connected || status.butlerRunning || !status.butlerAvailable;
