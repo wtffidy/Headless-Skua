@@ -158,13 +158,25 @@
     let toastTimeout = 0;
 
     async function api(path, options = {}) {
-      const response = await fetch(path, {
-        ...options,
-        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || payload.detail || `Request failed (${response.status})`);
-      return payload;
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const response = await fetch(path, {
+          ...options,
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || payload.detail || `Request failed (${response.status})`);
+        return payload;
+      } catch (error) {
+        if (error.name === "AbortError")
+          throw new Error("The panel API did not respond within 5 seconds.");
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
+      }
     }
 
     function notify(message, isError = false) {
