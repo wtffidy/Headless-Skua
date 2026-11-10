@@ -30,15 +30,14 @@ internal static class HeadlessLoginFlow
         HeadlessConsole.Info($"Authenticating {username}...");
         bot.Servers.Login(username, password);
 
-        if (!await WaitForServerListAsync(bot, cancellationToken))
+        List<Server> servers = await bot.Servers.GetServers(true);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (servers.Count == 0)
         {
-            HeadlessConsole.Error("The game server list did not appear. Check the credentials and try again.");
+            HeadlessConsole.Error("The game server API did not return any servers.");
             return false;
         }
-
-        List<Server> servers = bot.Servers.ServerList.Count > 0
-            ? bot.Servers.ServerList.ToList()
-            : await bot.Servers.GetServers(true);
 
         if (servers.Count == 0)
         {
@@ -87,7 +86,7 @@ internal static class HeadlessLoginFlow
         bool selectedInClient = false;
         try
         {
-            selectedInClient = bot.Flash.Call<bool>("clickServer", selectedServer.Name);
+            selectedInClient = bot.Servers.Connect(selectedServer);
         }
         catch (Exception exception)
         {
@@ -96,19 +95,11 @@ internal static class HeadlessLoginFlow
 
         if (!selectedInClient)
         {
-            try
-            {
-                int port = selectedServer.Port > 0 ? selectedServer.Port : 5588;
-                bot.Servers.ConnectIP(selectedServer.IP, port);
-            }
-            catch (Exception exception)
-            {
-                HeadlessConsole.Error($"Could not connect to {selectedServer.Name}: {exception.Message}");
-                return false;
-            }
+            HeadlessConsole.Error($"Could not connect to {selectedServer.Name}.");
+            return false;
         }
 
-        bool connected = await WaitForWorldAsync(bot, cancellationToken);
+        bool connected = bot.Player.Playing && bot.Flash.IsWorldLoaded;
         if (!connected)
         {
             HeadlessConsole.Error($"Timed out while connecting to {selectedServer.Name}.");
@@ -161,35 +152,6 @@ internal static class HeadlessLoginFlow
         string? username = HeadlessConsole.Prompt("Username");
         string passwordInput = HeadlessConsole.ReadSecret("Password");
         return (username?.Trim() ?? string.Empty, passwordInput);
-    }
-
-    private static async Task<bool> WaitForServerListAsync(IScriptInterface bot, CancellationToken cancellationToken)
-    {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(90);
-        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
-        {
-            if (bot.Servers.ServerList.Count > 0)
-                return true;
-
-            string? modal = null;
-            try
-            {
-                modal = bot.Flash.Call<string>("getActiveModalMessage");
-            }
-            catch
-            {
-            }
-
-            if (!string.IsNullOrWhiteSpace(modal) && !string.Equals(modal, "null", StringComparison.OrdinalIgnoreCase))
-            {
-                HeadlessConsole.Error($"Login rejected: {modal.Trim()}");
-                return false;
-            }
-
-            await Task.Delay(250, cancellationToken);
-        }
-
-        return false;
     }
 
     private static async Task<bool> WaitForWorldAsync(IScriptInterface bot, CancellationToken cancellationToken)
