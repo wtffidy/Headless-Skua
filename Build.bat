@@ -92,6 +92,20 @@ dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% -
 if errorlevel 1 goto :failed
 
 echo.
+echo Copying Playwright driver files...
+set "PLAYWRIGHT_DRIVER_DIR=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0\.playwright"
+if not exist "%PLAYWRIGHT_DRIVER_DIR%\node\win32_x64\node.exe" (
+    echo [ERROR] Playwright Node driver was not found in the build output.
+    goto :failed
+)
+if not exist "%PLAYWRIGHT_DRIVER_DIR%\package\cli.js" (
+    echo [ERROR] Playwright CLI entry point was not found in the build output.
+    goto :failed
+)
+xcopy "%PLAYWRIGHT_DRIVER_DIR%" "%OUTPUT_DIR%\.playwright\\" /E /I /Y >nul
+if errorlevel 1 goto :failed
+
+echo.
 echo Copying Ruffle runtime and game files...
 xcopy "runtime\ruffle-host" "%OUTPUT_DIR%\runtime\ruffle-host\" /E /I /Y >nul
 if errorlevel 1 goto :failed
