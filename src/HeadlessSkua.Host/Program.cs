@@ -179,6 +179,9 @@ internal static class Program
             // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
             // rather than halfway through an unattended script.
             IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
+            scriptInterface.Initialize();
+            HeadlessConsole.Success("Skua game-state services initialized.");
+
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
 
             await using RemotePanelHost? remotePanel = args.Contains("--no-panel", StringComparer.OrdinalIgnoreCase)
@@ -255,7 +258,8 @@ internal static class Program
         }
         catch (Exception exception)
         {
-            HeadlessConsole.Error($"Headless Skua failed: {exception.Message}");
+            HeadlessConsole.Error($"Headless Skua failed: {exception.GetType().Name}: {exception.Message}");
+            HeadlessConsole.Debug(exception.ToString());
             return 2;
         }
         finally
