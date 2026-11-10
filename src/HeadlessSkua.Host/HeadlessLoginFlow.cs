@@ -31,7 +31,9 @@ internal static class HeadlessLoginFlow
         bot.Servers.SetLoginInfo(username, password);
         HeadlessConsole.Info($"Authenticating {username}...");
         Stopwatch authenticationTimer = Stopwatch.StartNew();
+        Stopwatch loginDispatchTimer = Stopwatch.StartNew();
         bot.Servers.Login(username, password);
+        HeadlessConsole.Info($"AQW login request dispatched in {loginDispatchTimer.Elapsed.TotalSeconds:F2}s.");
 
         if (!await WaitForServerListAsync(bot, cancellationToken))
         {
