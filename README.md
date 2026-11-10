@@ -1,103 +1,82 @@
 # Headless Skua
 
-**A fully headless AdventureQuest Worlds automation runtime built around the Skua engine and existing Skua scripts.**
+**A headless AdventureQuest Worlds automation runtime built around the Skua engine and existing Skua scripts.**
 
-Headless Skua is a separate .NET 10 host for Skua. It is intended to run without an interactive desktop, window, or visible game client while retaining compatibility with existing Skua scripts and CoreBots wherever the underlying runtime permits.
+Headless Skua is a separate .NET 10 host for Skua. It runs the AQW client in headless Chromium through Ruffle, with the .NET host providing Skua services, scripts, plugins, and command-line control.
 
-> **Status: Early runtime prototype.** The headless Chromium/Ruffle host and initial Skua script integration are in place. Full game login, network compatibility, and broad CoreBots validation remain in progress.
+> **Status: Early runtime prototype.** Full game login, network compatibility, and broad CoreBots validation remain in progress.
 
-## Goals
+## Build and run
 
-- Run the AQW game client in a genuinely headless runtime.
-- Preserve the existing Skua scripting API and CoreBots compatibility.
-- Replace the Windows-only ActiveX/COM Flash host with a runtime-neutral implementation.
-- Keep desktop UI out of the runtime while allowing plugins to provide headless-compatible behaviour.
-- Start with one reliable account session, then add isolated multi-account sessions.
-- Provide a CLI, structured logs, graceful shutdown, and automation-friendly control.
-
-## Architecture direction
-
-The first runtime candidate is **Ruffle Web inside headless Chromium**, controlled by a .NET host through Playwright. Ruffle provides the Flash/ActionScript execution layer; Chromium runs without a visible window; the .NET side owns Skua services, scripts, lifecycle, and the bridge.
-
-This is a technical direction, not a claim that compatibility is already proven. The first milestone is a small end-to-end prototype that proves the exact SWF can load, network correctly, and exchange calls in both directions with .NET. If that fails, we will evaluate a native Ruffle embedding route before building the rest of the host around it.
-
-## Repository layout
-
-```
-Headless-Skua/
-├── docs/
-│   ├── architecture.md
-│   ├── roadmap.md
-│   └── decisions/
-│       └── 0001-headless-flash-runtime.md
-├── src/
-│   └── HeadlessSkua.Host/
-│       ├── HeadlessSkua.Host.csproj
-│       └── Program.cs
-├── Directory.Build.props
-└── HeadlessSkua.sln
-```
-
-## Requirements
-
-- .NET 10 SDK
-- Windows is the initial development target; cross-platform support is a later goal.
-- A legally obtained AQW client SWF and the required game assets/configuration.
-
-## Build
-
-Windows users can use the all-in-one build script. It initializes the VibeSkua submodule, restores and builds the solution, installs headless Chromium and Ruffle, copies the Skua SWF, and runs the prerequisite check.
+On Windows, run:
 
 ```bat
 Build.bat
 ```
 
-To build and immediately start the headless client:
+The build script restores and builds the solution, installs Chromium and Ruffle, then publishes a self-contained Windows x64 application to:
 
-```bat
-Build.bat run
+```
+Build\
+├── HeadlessSkua.exe
+├── HeadlessSkua.dll
+├── plugins\
+│   └── ButlerV5.dll
+└── runtime\
+    └── ruffle-host\
+        ├── ruffle\
+        └── game\
+            └── skua.swf
 ```
 
-To build, prepare the runtime, and execute an existing Skua C# script:
+The script launches the published executable after a successful build. You can also run it directly from the output folder:
 
 ```bat
-Build.bat run --script "C:\\path\\to\\YourScript.cs"
+Build\HeadlessSkua.exe run
 ```
 
-### Console login
+Run an existing Skua C# script:
 
-Starting the runtime opens the terminal UI. If VibeSkua Manager accounts are available, choose one from the numbered list; otherwise choose manual login and enter a username and password (the password is not echoed). After authentication, select an online game server from the numbered server list. Scripts and ButlerV5 start only after the game world is connected.
+```bat
+Build\HeadlessSkua.exe run --script "C:\path\to\YourScript.cs"
+```
 
-The terminal supports the Midnight, Ember, and Neon themes with `--theme midnight`, `--theme ember`, or `--theme neon`. Use `--no-color` or set `NO_COLOR` to disable ANSI styling.
+Run ButlerV5:
 
-### Plugins and ButlerV5
+```bat
+Build\HeadlessSkua.exe -butler PlayerName
+Build\HeadlessSkua.exe -butler PlayerName 30m
+Build\HeadlessSkua.exe -butler PlayerName 02:00:00
+Build\HeadlessSkua.exe -butler stop
+```
 
-Headless Skua initializes Skua's plugin manager and discovers plugin assemblies from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) as well as the host's local plugins folder. Plugins that rely on interactive desktop windows cannot show those windows in headless mode; their non-UI functionality can still run when their dependencies support the headless host.
+An omitted Butler duration means follow indefinitely until stopped. Duration formats accept seconds, minutes, hours, days, or `HH:MM:SS`.
 
-ButlerV5 is bundled as a plugin and can be controlled from the command line:
+## Console and login
 
-\`\`\`bat
-Build.bat -butler PlayerName
-Build.bat -butler PlayerName 30m
-Build.bat -butler PlayerName 02:00:00
-Build.bat -butler stop
-\`\`\`
+The terminal supports Midnight, Ember, and Neon themes:
 
-An omitted duration means the follow runs indefinitely. Durations accept s, m, h, d, or HH:MM:SS. The stop command sends a local named-pipe request to the active Butler session. ButlerV5 continues to use its existing shared sync files, so other ButlerV5-enabled clients can see and summon this account as usual.
+```bat
+Build\HeadlessSkua.exe run --theme neon
+Build\HeadlessSkua.exe run --theme ember
+Build\HeadlessSkua.exe run --theme midnight
+Build\HeadlessSkua.exe run --no-color
+```
 
-Requirements: Git and the .NET 10 SDK. The script uses PowerShell (or PowerShell 7 if installed) for runtime setup. Run `Build.bat` again after pulling updates to rebuild and refresh the runtime.
+If VibeSkua Manager accounts are available, choose one from the numbered list. Otherwise, choose manual login and enter a username and password. After authentication, select an online game server. Scripts and ButlerV5 start after the game world connects.
 
-For manual setup, initialize the submodule with `git submodule update --init --recursive`, then use `dotnet build HeadlessSkua.sln --configuration Release` and the Playwright/Ruffle setup scripts under `runtime/ruffle-host`.
+## Plugins
 
-Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites without rebuilding.
+Headless Skua initializes Skua's plugin manager and discovers plugins from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) and the local `plugins` folder. Plugins that require desktop UI cannot display those windows in headless mode; compatibility depends on their dependencies.
 
-## Current milestones
+ButlerV5 is bundled in the published `Build\plugins` folder.
 
-See [docs/roadmap.md](docs/roadmap.md) for the implementation plan and [docs/architecture.md](docs/architecture.md) for the boundaries between the host, game runtime, Skua services, and scripts.
+## Requirements
 
-## Compatibility principles
+- Git
+- .NET 10 SDK
+- Windows x64 for the current published build
 
-- Existing Skua scripts should not need to know whether the game is hosted by ActiveX or a headless runtime.
-- Runtime-specific code belongs behind the Flash/runtime abstraction, not inside CoreBots.
-- Desktop-only services must be replaced with headless implementations or excluded from the headless dependency graph.
-- Credentials and session secrets must never be written to logs or committed to the repository.
+The published executable is self-contained and does not require a separately installed .NET runtime. Build.bat still requires the .NET 10 SDK to compile and publish.
+
+For manual development builds, initialize the submodule with `git submodule update --init --recursive`, then run `dotnet build HeadlessSkua.sln --configuration Release`.
