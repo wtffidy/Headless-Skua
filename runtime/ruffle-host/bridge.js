@@ -2,6 +2,7 @@
   "use strict";
 
   const callbackNames = [
+    "debug",
     "requestLoadGame",
     "pre-load",
     "loaded",
