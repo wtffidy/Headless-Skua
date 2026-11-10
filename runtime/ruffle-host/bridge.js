@@ -83,13 +83,13 @@
       player.id = "headless-skua-player";
       container.appendChild(player);
 
-      setStatus("loading", source);
+      window.__headlessSkua.setStatus("loading", source);
       await player.ruffle().load({
         url: source,
         allowScriptAccess: true
       });
 
-      setStatus("loaded", source);
+      window.__headlessSkua.setStatus("loaded", source);
       return true;
     },
 
