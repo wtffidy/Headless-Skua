@@ -118,6 +118,12 @@ public static class HeadlessConsole
 {
     private const int HeaderLines = 3;
 
+    /// <summary>
+    /// Whether low-level Ruffle browser and ActionScript trace output should be hidden.
+    /// Host status, prompts, and actionable errors remain visible.
+    /// </summary>
+    public static bool Quiet { get; private set; }
+
     private static readonly object _lock = new();
     private static Theme _theme = Theme.Midnight;
 
@@ -148,6 +154,7 @@ public static class HeadlessConsole
     public static void Init(string[]? args = null, Theme? fallback = null, string title = "Skua • Headless")
     {
         args ??= [];
+        Quiet = args.Contains("--quiet", StringComparer.OrdinalIgnoreCase);
 
         string? requested = ArgValue(args, "--theme");
         bool found = Theme.All.TryGetValue(requested ?? string.Empty, out Theme? picked);
