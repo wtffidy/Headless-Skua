@@ -221,9 +221,9 @@ internal static class HeadlessLoginFlow
     /// Waits until the selected AQW server has finished loading the game world.
     /// </summary>
     /// <param name="bot">The initialized Skua script interface.</param>
-    /// <param name="timeout">Maximum time allowed for world loading.</param>
+    /// <param name="timeout">Maximum time allowed for world and local-avatar initialization.</param>
     /// <param name="cancellationToken">Token used to cancel the connection wait.</param>
-    /// <returns>True when the player is playing and the world is loaded.</returns>
+    /// <returns>True when the local character is present in the initialized world.</returns>
     private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, HeadlessSessionState sessionState, TimeSpan timeout, CancellationToken cancellationToken)
     {
         Stopwatch connectionTimer = Stopwatch.StartNew();
@@ -343,7 +343,7 @@ internal static class HeadlessLoginFlow
             bool avatarModelReady = myAvatarAssigned && !bot.Flash.IsNull("world.myAvatar.pMC");
             bool artLoaded = avatarModelReady
                 && bot.Flash.CallGameFunction<bool>("world.myAvatar.pMC.artLoaded");
-            bool playerReady = playing && inventoryItems > 0 && !mapLoading && artLoaded;
+            bool playerReady = inventoryItems > 0 && !mapLoading && artLoaded;
 
             if (playerReady)
             {
