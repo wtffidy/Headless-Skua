@@ -4,7 +4,7 @@
 
 Headless Skua is a separate .NET 10 host for Skua. It is intended to run without an interactive desktop, window, or visible game client while retaining compatibility with existing Skua scripts and CoreBots wherever the underlying runtime permits.
 
-> **Status: Early architecture and runtime-prototype phase.** The repository is being established now. Game login, the Ruffle bridge, and script execution are not implemented yet.
+> **Status: Early runtime prototype.** The headless Chromium/Ruffle host and initial Skua script integration are in place. Full game login, network compatibility, and broad CoreBots validation remain in progress.
 
 ## Goals
 
@@ -46,36 +46,29 @@ Headless-Skua/
 
 ## Build
 
-Clone with the pinned VibeSkua source submodule:
+Windows users can use the all-in-one build script. It initializes the VibeSkua submodule, restores and builds the solution, installs headless Chromium and Ruffle, copies the Skua SWF, and runs the prerequisite check.
 
-```powershell
-git clone --recurse-submodules https://github.com/wtffidy/Headless-Skua.git
-cd Headless-Skua
-dotnet build HeadlessSkua.sln
+```bat
+Build.bat
 ```
 
-If the repository was cloned without submodules, initialize them with `git submodule update --init --recursive`.
+To build and immediately start the headless client:
 
-Install the headless browser and Ruffle assets:
-
-```powershell
-pwsh src/HeadlessSkua.Host/bin/Debug/net10.0/playwright.ps1 install chromium
-pwsh runtime/ruffle-host/Install-Runtime.ps1
+```bat
+Build.bat run
 ```
 
-Start the runtime:
+To build, prepare the runtime, and execute an existing Skua C# script:
 
-```powershell
-dotnet run --project src/HeadlessSkua.Host -- run
+```bat
+Build.bat run --script "C:\\path\\to\\YourScript.cs"
 ```
 
-Run an existing Skua C# script after the client initializes:
+Requirements: Git and the .NET 10 SDK. The script uses PowerShell (or PowerShell 7 if installed) for runtime setup. Run `Build.bat` again after pulling updates to rebuild and refresh the runtime.
 
-```powershell
-dotnet run --project src/HeadlessSkua.Host -- run --script "C:\\path\\to\\YourScript.cs"
-```
+For manual setup, initialize the submodule with `git submodule update --init --recursive`, then use `dotnet build HeadlessSkua.sln --configuration Release` and the Playwright/Ruffle setup scripts under `runtime/ruffle-host`.
 
-Headless mode uses saved script options and defaults when an interactive dialog would otherwise be required. Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites.
+Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites without rebuilding.
 
 ## Current milestones
 
