@@ -23,12 +23,13 @@ namespace HeadlessSkua;
 internal sealed class RuffleRuntime : IAsyncDisposable
 {
     private readonly string _runtimeDirectory;
+    private readonly SemaphoreSlim _pageLock = new(1, 1);
     private WebApplication? _webApplication;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
     private IBrowserContext? _browserContext;
     private IPage? _page;
-    private readonly SemaphoreSlim _pageLock = new(1, 1);
+    private int _disposeState;
 
     /// <summary>
     /// Raised when the SWF invokes one of the registered ExternalInterface functions.
@@ -128,19 +129,27 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
     /// <summary>
     /// Queues an ActionScript ExternalInterface callback after the current browser evaluation returns.
+    /// Calls are ignored once shutdown begins because late Skua callbacks can outlive the browser page.
     /// </summary>
     /// <param name="functionName">Callback name registered by ActionScript.</param>
     /// <param name="arguments">Arguments passed to the callback.</param>
     public async Task DispatchActionScriptAsync(string functionName, object?[]? arguments = null)
     {
-        if (_page is null)
+        if (Volatile.Read(ref _disposeState) != 0)
+            return;
+
+        IPage? page = _page;
+        if (page is null)
             throw new InvalidOperationException("The Ruffle runtime has not started.");
 
         await _pageLock.WaitAsync();
 
         try
         {
-            await _page.EvaluateAsync<bool>(
+            if (Volatile.Read(ref _disposeState) != 0)
+                return;
+
+            await page.EvaluateAsync<bool>(
                 "payload => window.__headlessSkua.dispatchActionScript(payload.name, payload.args)",
                 new { name = functionName, args = arguments ?? Array.Empty<object>() });
         }
@@ -152,20 +161,28 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
     /// <summary>
     /// Invokes an ActionScript ExternalInterface callback registered by the SWF.
+    /// Calls are ignored once shutdown begins because late Skua callbacks can outlive the browser page.
     /// </summary>
     /// <param name="functionName">Callback name registered by ActionScript.</param>
     /// <param name="arguments">Arguments passed to the callback.</param>
     /// <returns>The callback result as JSON, when one is returned.</returns>
     public async Task<JsonElement?> CallActionScriptAsync(string functionName, object?[]? arguments = null)
     {
-        if (_page is null)
+        if (Volatile.Read(ref _disposeState) != 0)
+            return null;
+
+        IPage? page = _page;
+        if (page is null)
             throw new InvalidOperationException("The Ruffle runtime has not started.");
 
         await _pageLock.WaitAsync();
 
         try
         {
-            return await _page.EvaluateAsync<JsonElement?>(
+            if (Volatile.Read(ref _disposeState) != 0)
+                return null;
+
+            return await page.EvaluateAsync<JsonElement?>(
                 "payload => window.__headlessSkua.callActionScript(payload.name, payload.args)",
                 new { name = functionName, args = arguments ?? Array.Empty<object>() });
         }
@@ -260,7 +277,9 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             "headlessSkuaHostCall",
             (source, name, values) =>
             {
-                HostCallReceived?.Invoke(name, values.Clone());
+                if (Volatile.Read(ref _disposeState) == 0)
+                    HostCallReceived?.Invoke(name, values.Clone());
+
                 return Task.FromResult<object?>(null);
             });
     }
@@ -282,19 +301,43 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Releases the browser, Playwright process, and local web server.
+    /// Stops accepting bridge calls, waits for any active browser evaluation, and then releases runtime resources.
+    /// The semaphore is intentionally left undisposed because late Skua callbacks may still reach this instance.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_browser is not null)
-            await _browser.CloseAsync();
+        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+            return;
 
-        if (_playwright is not null)
-            _playwright.Dispose();
+        HostCallReceived = null;
 
-        if (_webApplication is not null)
-            await _webApplication.StopAsync();
+        await _pageLock.WaitAsync();
 
-        _pageLock.Dispose();
+        try
+        {
+            _page = null;
+
+            if (_browser is not null)
+            {
+                await _browser.CloseAsync();
+                _browser = null;
+            }
+
+            _browserContext = null;
+
+            _playwright?.Dispose();
+            _playwright = null;
+
+            if (_webApplication is not null)
+            {
+                await _webApplication.StopAsync();
+                await _webApplication.DisposeAsync();
+                _webApplication = null;
+            }
+        }
+        finally
+        {
+            _pageLock.Release();
+        }
     }
 }
