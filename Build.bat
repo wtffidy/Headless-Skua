@@ -154,8 +154,10 @@ echo Headless Skua opened in a separate console window.
 exit /b 0
 
 :launch
-shift
-start "Headless Skua" /D "%OUTPUT_DIR%" "%OUTPUT_DIR%\HeadlessSkua.exe" run %*
+set "RUN_ARGS=%*"
+set "RUN_ARGS=%RUN_ARGS:* =%"
+if /I "%RUN_ARGS%"=="run" set "RUN_ARGS="
+start "Headless Skua" /D "%OUTPUT_DIR%" "%OUTPUT_DIR%\HeadlessSkua.exe" run %RUN_ARGS%
 if errorlevel 1 goto :launch_failed
 echo Headless Skua opened in a separate console window.
 exit /b 0
