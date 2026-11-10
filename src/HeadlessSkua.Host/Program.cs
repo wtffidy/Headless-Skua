@@ -129,7 +129,8 @@ internal static class Program
 
             flash.FlashCall += (name, values) =>
             {
-                Console.WriteLine($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
+                if (!HeadlessConsole.Quiet)
+                    HeadlessConsole.Debug($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
 
                 if (string.Equals(name, "loaded", StringComparison.OrdinalIgnoreCase))
                 {
@@ -365,6 +366,7 @@ internal static class Program
                                  Web panel port (default: 8788).
               --no-panel        Disable the web panel.
               --theme <name>    Console theme: midnight, ember, or neon.
+              --quiet           Hide Ruffle/browser and ActionScript trace noise.
               --no-color        Disable terminal colours.
 
             Remote panel:
