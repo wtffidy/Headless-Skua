@@ -31,6 +31,26 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     public event FlashCallHandler? FlashCall;
 
     /// <summary>
+    /// Reports safe bridge diagnostics to the console and the remote panel log service.
+    /// </summary>
+    public event Action<string>? DiagnosticLogged;
+
+    /// <summary>
+    /// Writes a map-operation diagnostic without exposing packet payloads or player data.
+    /// </summary>
+    /// <param name="message">The safe diagnostic text.</param>
+    /// <param name="isError">Whether the operation failed.</param>
+    private void LogMapDiagnostic(string message, bool isError = false)
+    {
+        if (isError)
+            HeadlessConsole.Error(message);
+        else
+            HeadlessConsole.Info(message);
+
+        DiagnosticLogged?.Invoke(message);
+    }
+
+    /// <summary>
     /// Creates the compatibility adapter for an already-started Ruffle runtime.
     /// </summary>
     /// <param name="runtime">The active Ruffle runtime.</param>
@@ -107,7 +127,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
                 return type.IsValueType ? Activator.CreateInstance(type) : null;
 
             if (outboundOperation is not null)
-                HeadlessConsole.Debug($"AQW {outboundOperation} entered the ActionScript bridge.");
+                LogMapDiagnostic($"AQW {outboundOperation} entered the ActionScript bridge.");
 
             string? cacheKey = GetReadCallCacheKey(function, type, args, out long cacheDurationMilliseconds);
             long now = Environment.TickCount64;
@@ -122,7 +142,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
                 _readCallCache[cacheKey] = new CachedCall(Environment.TickCount64 + cacheDurationMilliseconds, converted);
 
             if (outboundOperation is not null)
-                HeadlessConsole.Info($"AQW {outboundOperation} returned from ActionScript in {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms.");
+                LogMapDiagnostic($"AQW {outboundOperation} returned from ActionScript in {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms.");
 
             FlushDeferredModuleCalls();
             return converted;
@@ -130,7 +150,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         catch (Exception exception)
         {
             if (outboundOperation is not null)
-                HeadlessConsole.Error($"AQW {outboundOperation} bridge call failed after {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms: {exception.Message}");
+                LogMapDiagnostic($"AQW {outboundOperation} bridge call failed after {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms: {exception.Message}", isError: true);
 
             Console.Error.WriteLine($"[Ruffle Call] {function}: {exception.GetType().Name}: {exception.Message}");
             return type.IsValueType ? Activator.CreateInstance(type) : null;
