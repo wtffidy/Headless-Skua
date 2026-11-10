@@ -354,12 +354,17 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         await _page!.RouteAsync("**/gamefiles/**", async route =>
         {
             string requestedFileName = Path.GetFileName(new Uri(route.Request.Url).AbsolutePath);
-            if (!requestedFileName.Equals(gameClientFileName, StringComparison.OrdinalIgnoreCase))
+            bool isAqwGameClient = requestedFileName.StartsWith("Game4000r", StringComparison.OrdinalIgnoreCase)
+                && requestedFileName.EndsWith(".swf", StringComparison.OrdinalIgnoreCase);
+            if (!isAqwGameClient)
             {
                 await route.ContinueAsync();
                 return;
             }
 
+            // The Skua bootstrap can request the game-client filename compiled into
+            // its own build (currently R8), regardless of the version selected here.
+            // Replace any versioned Game4000 SWF request with the selected local build.
             await route.FulfillAsync(new RouteFulfillOptions
             {
                 Status = 200,
@@ -367,7 +372,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
                 BodyBytes = localGameClient
             });
 
-            HeadlessConsole.Success($"Serving {gameClientFileName} locally.");
+            HeadlessConsole.Success($"Serving selected {gameClientFileName} for AQW request {requestedFileName}.");
         });
 
         HeadlessConsole.Info($"Local AQW game-client override is ready for {gameClientFileName}.");
