@@ -26,8 +26,8 @@ namespace System.Drawing
     }
 }
 
-namespace System.Windows.Forms;
-
+namespace System.Windows.Forms
+{
 public delegate void MethodInvoker();
 public delegate void PaintEventHandler(object? sender, System.Drawing.PaintEventArgs e);
 
@@ -89,4 +89,5 @@ public static class Application
 {
     public static void Run(Form form) => form.Show();
     public static void DoEvents() { }
+}
 }
