@@ -60,7 +60,7 @@ Install the headless browser and Ruffle assets:
 
 ```powershell
 pwsh src/HeadlessSkua.Host/bin/Debug/net10.0/playwright.ps1 install chromium
-pwsh runtime/ruffle-host/Install-Runtime.ps1 -SwfPath "C:\\path\\to\\skua.swf"
+pwsh runtime/ruffle-host/Install-Runtime.ps1
 ```
 
 Start the runtime:
