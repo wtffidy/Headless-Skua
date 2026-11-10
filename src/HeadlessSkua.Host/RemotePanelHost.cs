@@ -519,15 +519,15 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             if (scriptThread is null)
                 return new { threadState = "Starting", threadId = (int?)null, stackTrace = "VibeSkua has not published its script worker thread yet." };
 
-            string? stackTrace = scriptThread.StackTrace;
-            if (string.IsNullOrWhiteSpace(stackTrace))
-                stackTrace = "The worker thread has no readable managed stack at this instant.";
+            bool cancellationRequested = _scriptManager.ScriptCts?.IsCancellationRequested ?? false;
+            string diagnostics = "Cross-thread managed stack capture is not supported by .NET 10. Use the Script log and AQW bridge trace below to identify the current operation.";
 
             return new
             {
                 threadState = scriptThread.ThreadState.ToString(),
                 threadId = (int?)scriptThread.ManagedThreadId,
-                stackTrace = stackTrace.Length > 12_000 ? stackTrace[..12_000] : stackTrace
+                cancellationRequested,
+                stackTrace = diagnostics
             };
         }
         catch (Exception exception)
