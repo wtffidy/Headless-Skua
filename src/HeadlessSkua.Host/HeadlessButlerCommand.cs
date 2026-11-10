@@ -60,15 +60,25 @@ internal static class HeadlessButlerCommand
             ? $"[ButlerV5] Session will end after {duration.Value:g}. Use 'HeadlessSkua -butler stop' to stop early."
             : "[ButlerV5] Running indefinitely. Use 'HeadlessSkua -butler stop' to stop.");
 
-        Task stopRequest = WaitForStopRequestAsync(cancellationToken);
+        using CancellationTokenSource stopListenerSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task stopRequest = WaitForStopRequestAsync(stopListenerSource.Token);
         Task durationElapsed = duration.HasValue
             ? Task.Delay(duration.Value, cancellationToken)
             : Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
 
         await Task.WhenAny(stopRequest, durationElapsed);
+        stopListenerSource.Cancel();
 
         try
         {
+            try
+            {
+                await stopRequest;
+            }
+            catch (OperationCanceledException) when (stopListenerSource.IsCancellationRequested)
+            {
+            }
+
             stopMethod.Invoke(plugin, null);
             Console.WriteLine("[ButlerV5] Follow stopped.");
         }
