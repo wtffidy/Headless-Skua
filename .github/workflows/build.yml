@@ -120,13 +120,13 @@ jobs:
               throw "The installed-script API did not return HTTP 200."
             }
             $scripts = $scriptsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-            if ($null -eq $scripts.scripts) {
-              throw "The installed-script API response is missing its scripts list."
+            if ($null -eq $scripts.folders -or $null -eq $scripts.files -or $scripts.root -ne "Scripts") {
+              throw "The Scripts explorer API response is missing its folders or files."
             }
 
             $page = $client.GetStringAsync("http://127.0.0.1:8788/").GetAwaiter().GetResult()
-            if ($page -notmatch "Panel API online" -or $page -notmatch "connectionHint" -or $page -notmatch "scriptPicker") {
-              throw "The published panel page is missing its connection-state or script-picker UI."
+            if ($page -notmatch "Panel API online" -or $page -notmatch "connectionHint" -or $page -notmatch "browseScripts" -or $page -notmatch "explorerBackdrop" -or $page -notmatch "loginState" -or $page -notmatch "worldState") {
+              throw "The published panel page is missing its login-state or folder-explorer UI."
             }
 
             $scriptBody = [System.Net.Http.StringContent]::new('{"path":"C:/HeadlessSmoke/missing.cs"}', [System.Text.Encoding]::UTF8, "application/json")
