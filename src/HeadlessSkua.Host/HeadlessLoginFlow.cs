@@ -156,6 +156,8 @@ internal static class HeadlessLoginFlow
             return false;
         }
 
+        bot.Servers.LastIP = selectedServer.IP;
+        bot.Servers.LastName = selectedServer.Name;
         HeadlessConsole.Info($"Connection request accepted. Waiting for {selectedServer.Name} to finish loading...");
         bool connected = await WaitForWorldLoadedAsync(bot, TimeSpan.FromSeconds(60), cancellationToken);
         if (!connected)
