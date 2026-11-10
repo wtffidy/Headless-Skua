@@ -30,14 +30,21 @@ internal sealed class HeadlessSessionState
             return;
         }
 
-        if (!string.Equals(function, "packetFromServer", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        foreach (object? argument in arguments)
+        if (string.Equals(function, "packetFromServer", StringComparison.OrdinalIgnoreCase))
         {
-            if (argument is string packet)
-                ObservePacket(packet);
+            foreach (object? argument in arguments)
+                if (argument is string packet)
+                    ObservePacket(packet);
+
+            return;
         }
+
+        // Some Ruffle builds forward the parsed extension response through pext
+        // without exposing the original packet as a separate callback argument.
+        if (string.Equals(function, "pext", StringComparison.OrdinalIgnoreCase))
+            foreach (object? argument in arguments)
+                if (argument is string json)
+                    ObserveExtensionResponse(json);
     }
 
     /// <summary>
@@ -59,6 +66,36 @@ internal sealed class HeadlessSessionState
         {
             _loginAccepted = false;
             _account = null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the parsed SmartFox extension response as a fallback when Ruffle only
+    /// exposes the response through the pext callback.
+    /// </summary>
+    /// <param name="json">The serialized extension response.</param>
+    private void ObserveExtensionResponse(string json)
+    {
+        try
+        {
+            using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("params", out System.Text.Json.JsonElement parameters)
+                || !parameters.TryGetProperty("dataObj", out System.Text.Json.JsonElement data)
+                || data.ValueKind != System.Text.Json.JsonValueKind.Array
+                || data.GetArrayLength() < 4
+                || !string.Equals(data[0].GetString(), "loginResponse", StringComparison.OrdinalIgnoreCase)
+                || !bool.TryParse(data[2].GetString(), out bool accepted))
+                return;
+
+            string? account = accepted && data.GetArrayLength() > 3 ? data[3].GetString()?.Trim() : null;
+            lock (_sync)
+            {
+                _loginAccepted = accepted;
+                _account = string.IsNullOrWhiteSpace(account) ? null : account;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
         }
     }
 
