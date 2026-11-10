@@ -232,16 +232,16 @@ internal static class Program
                 Skua.Core.Models.ClientFileSources.EnsureInitialized();
 
                 IPluginManager pluginManager = serviceProvider.GetRequiredService<IPluginManager>();
-                pluginManager.Initialize();
 
                 ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
                 settings.SetApplicationVersion();
 
-                // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
-                // rather than halfway through an unattended script.
+                // Resolve services without starting their background polling or loading plugins.
+                // AQW creates world.myAvatar and its inventory asynchronously after loginResponse.
+                // Starting Skua's 20 ms ScriptTimer or plugins before that point causes null-object
+                // callbacks (inventoryBagUsedSlots, HidePlayers, and map response handlers).
                 IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
-                serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
-                HeadlessConsole.Success($"Skua game-state services initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
+                IScriptInterfaceManager scriptInterfaceManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
 
                 HeadlessLogService headlessLogs = serviceProvider.GetRequiredService<HeadlessLogService>();
                 diagnosticLogs = headlessLogs;
@@ -270,8 +270,7 @@ internal static class Program
 
                 string? butlerTarget = GetOption(args, "--butler");
                 string? scriptPath = GetOption(args, "--script");
-                if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
-                    && (!string.IsNullOrWhiteSpace(butlerTarget) || !string.IsNullOrWhiteSpace(scriptPath)))
+                if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase))
                 {
                     if (!await HeadlessLoginFlow.WaitForAutomationReadyAsync(
                         scriptInterface,
@@ -279,6 +278,12 @@ internal static class Program
                         cancellationTokenSource.Token))
                         return 4;
                 }
+
+                // Only start Skua's recurring game-state work and load plugins after AQW has
+                // fully created the character, inventory, and player assets.
+                scriptInterfaceManager.Initialize();
+                pluginManager.Initialize();
+                HeadlessConsole.Success($"Skua game-state services initialized after player readiness in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
                 if (!string.IsNullOrWhiteSpace(butlerTarget))
                     return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
