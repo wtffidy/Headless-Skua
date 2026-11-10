@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Version = "0.7.1",
-    [string]$SwfPath
+    [string]$SwfPath = (Join-Path $PSScriptRoot "..\..\vendor\VibeSkua\Skua.AS3\skua\bin\skua.swf")
 )
 
 $ErrorActionPreference = "Stop"
