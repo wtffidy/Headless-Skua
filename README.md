@@ -69,7 +69,13 @@ Start the runtime:
 dotnet run --project src/HeadlessSkua.Host -- run
 ```
 
-Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites.
+Run an existing Skua C# script after the client initializes:
+
+```powershell
+dotnet run --project src/HeadlessSkua.Host -- run --script "C:\\path\\to\\YourScript.cs"
+```
+
+Headless mode uses saved script options and defaults when an interactive dialog would otherwise be required. Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites.
 
 ## Current milestones
 
