@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Headless Skua · Remote Panel</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8eaf4;background:#0a0d14;font-synthesis:none;font-weight:400;--panel:#121824;--panel2:#182131;--line:#293548;--muted:#929db2;--purple:#b39aff;--cyan:#6de2f1;--green:#72e3b5;--red:#ff8298}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 10% -10%,#312451 0,transparent 38%),radial-gradient(ellipse at 100% 0,#123441 0,transparent 32%),#0a0d14}
+    button,input{font:inherit}button{border:1px solid #655292;background:linear-gradient(135deg,#59428b,#3e3266);color:#f4efff;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;transition:filter .15s,transform .15s}button:hover{filter:brightness(1.16);transform:translateY(-1px)}button:disabled{opacity:.38;cursor:not-allowed;transform:none}.secondary{background:#202b3b;border-color:#39475d;color:#e0e7f3}.danger{background:#482634;border-color:#754052;color:#ffe1e7}
+    .shell{max-width:1180px;margin:auto;padding:26px 22px 46px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:25px}.brand{display:flex;align-items:center;gap:13px}.mark{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#b39aff,#6de2f1);color:#111521;font-weight:950;font-size:22px;box-shadow:0 9px 32px #9778ff45}.brand h1{font-size:19px;margin:0;letter-spacing:.025em}.brand p{margin:4px 0 0;color:var(--muted);font-size:12px}.connection{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:#687386;box-shadow:0 0 0 4px #68738622}.dot.online{background:var(--green);box-shadow:0 0 0 4px #72e3b522}
+    .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:15px}.card{background:linear-gradient(145deg,#171f2dee,#111722f5);border:1px solid var(--line);border-radius:16px;padding:19px;box-shadow:0 12px 35px #0002;min-width:0}.status{grid-column:span 12}.half{grid-column:span 6}.logs{grid-column:span 12}.cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.card h2{font-size:14px;margin:0;font-weight:760;letter-spacing:.02em}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stat{border:1px solid #2b3548;background:#121a27;border-radius:12px;padding:13px}.stat span{display:block;color:var(--muted);font-size:11px;margin-bottom:7px}.stat strong{font-size:15px;font-weight:720;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stat strong.good{color:var(--green)}.stat strong.wait{color:#f7d68a}.form{display:flex;flex-direction:column;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:11px;color:var(--muted)}input{width:100%;min-width:0;background:#0c121d;color:#e8eaf4;border:1px solid #344056;border-radius:9px;padding:11px 12px;outline:none}input:focus{border-color:var(--purple);box-shadow:0 0 0 3px #b39aff1c}input::placeholder{color:#68758a}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}.hint{font-size:11px;color:var(--muted);line-height:1.5;margin:0}.logs-head{display:flex;align-items:center;gap:7px}.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab{padding:7px 10px;font-size:11px;background:#1a2231;border:1px solid #344056;color:#b8c2d5;border-radius:8px}.tab.active{background:#332a50;border-color:#7763a8;color:#f0eaff}.logview{height:280px;overflow:auto;background:#090e17;border:1px solid #273348;border-radius:10px;padding:12px;color:#c4cde0;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.empty{color:#647087}.footer{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;color:#748096;font-size:10px}.toast{position:fixed;right:22px;bottom:22px;max-width:min(420px,calc(100vw - 44px));padding:12px 15px;border-radius:11px;border:1px solid #52647b;background:#182333;color:#e7edf9;box-shadow:0 14px 45px #0008;opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s;font-size:12px}.toast.show{opacity:1;transform:translateY(0)}.toast.error{border-color:#85465a;color:#ffdce4}.warning{border:1px solid #685637;background:#302719;color:#f4d99f;border-radius:10px;padding:11px 13px;font-size:11px;line-height:1.5;margin-top:15px}
+    @media(max-width:760px){.shell{padding:18px 13px 34px}.half{grid-column:span 12}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.top{align-items:flex-start}.connection{padding-top:7px}.card{padding:16px}.logview{height:240px}}
+    @media(max-width:420px){.brand h1{font-size:16px}.brand p{font-size:10px}.mark{width:39px;height:39px}.connection{font-size:10px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="mark">S</div>
+        <div><h1>HEADLESS SKUA</h1><p>Remote control centre <span style="color:#b39aff">·</span> v0.1</p></div>
+      </div>
+      <div class="connection"><span class="dot" id="connectionDot"></span><span id="connectionText">Connecting to host…</span></div>
+    </header>
+
+    <section class="grid">
+      <article class="card status">
+        <div class="cardhead"><div><div class="eyebrow">Live session</div><h2 style="margin-top:5px">Runtime overview</h2></div><span class="eyebrow" id="updatedAt">Waiting for status</span></div>
+        <div class="stats">
+          <div class="stat"><span>Game connection</span><strong id="runtimeState" class="wait">Checking…</strong></div>
+          <div class="stat"><span>Server</span><strong id="serverName">—</strong></div>
+          <div class="stat"><span>Script</span><strong id="scriptState">Idle</strong></div>
+          <div class="stat"><span>ButlerV5</span><strong id="butlerState">Idle</strong></div>
+        </div>
+        <div class="warning">Remote control has no login protection in this version. Only enable remote mode on a trusted home network or VPN. Do not forward this port from the public internet.</div>
+      </article>
+
+      <article class="card half">
+        <div class="cardhead"><div><div class="eyebrow">Automation</div><h2 style="margin-top:5px">Run a Skua script</h2></div></div>
+        <form class="form" id="scriptForm">
+          <div class="field"><label for="scriptPath">Script path on the Headless Skua host</label><input id="scriptPath" autocomplete="off" placeholder="C:\Skua\Scripts\MyScript.cs" required></div>
+          <p class="hint">The file must already exist on the computer running Headless Skua. This sends a path to the host; it does not upload the file.</p>
+          <div class="actions"><button id="startScript" type="submit">Start script</button><button class="danger" id="stopScript" type="button">Stop script</button></div>
+        </form>
+      </article>
+
+      <article class="card half">
+        <div class="cardhead"><div><div class="eyebrow">Player follow</div><h2 style="margin-top:5px">ButlerV5</h2></div></div>
+        <form class="form" id="butlerForm">
+          <div class="field"><label for="butlerUsername">Player to follow</label><input id="butlerUsername" autocomplete="off" placeholder="PlayerName" required></div>
+          <div class="field"><label for="butlerDuration">Duration <span style="color:#748096">(optional)</span></label><input id="butlerDuration" autocomplete="off" placeholder="30m · 2h · 01:30:00 · blank = forever"></div>
+          <p class="hint">Butler runs until the duration expires or you stop it from this panel.</p>
+          <div class="actions"><button id="startButler" type="submit">Start following</button><button class="danger" id="stopButler" type="button">Stop Butler</button></div>
+        </form>
+      </article>
+
+      <article class="card logs">
+        <div class="cardhead" style="flex-wrap:wrap"><div><div class="eyebrow">Live output</div><h2 style="margin-top:5px">Console logs</h2></div><div class="logs-head"><div class="tabs"><button class="tab active" data-log="script">Script</button><button class="tab" data-log="debug">Debug</button><button class="tab" data-log="flash">Flash</button></div><button class="secondary" id="refreshLogs" type="button">Refresh</button></div></div>
+        <pre class="logview" id="logView"><span class="empty">Waiting for log entries…</span></pre>
+        <div class="footer"><span>Refreshes automatically every 2.5 seconds</span><span id="logCount">0 lines</span></div>
+      </article>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    "use strict";
+    const byId = id => document.getElementById(id);
+    let selectedLog = "script";
+    let lastLogText = "";
+    let toastTimeout = 0;
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || payload.detail || `Request failed (${response.status})`);
+      return payload;
+    }
+
+    function notify(message, isError = false) {
+      const toast = byId("toast");
+      toast.textContent = message;
+      toast.classList.toggle("error", isError);
+      toast.classList.add("show");
+      window.clearTimeout(toastTimeout);
+      toastTimeout = window.setTimeout(() => toast.classList.remove("show"), 3600);
+    }
+
+    async function refreshStatus() {
+      try {
+        const status = await api("/api/status");
+        byId("connectionDot").classList.add("online");
+        byId("connectionText").textContent = "Host online";
+        byId("runtimeState").textContent = status.runtime;
+        byId("runtimeState").className = status.connected ? "good" : "wait";
+        byId("serverName").textContent = status.server || "—";
+        byId("scriptState").textContent = status.scriptRunning ? "Running" : "Idle";
+        byId("scriptState").className = status.scriptRunning ? "good" : "";
+        byId("butlerState").textContent = status.butlerRunning ? "Following" : "Idle";
+        byId("butlerState").className = status.butlerRunning ? "good" : "";
+        byId("updatedAt").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        byId("startScript").disabled = !status.connected || status.scriptRunning;
+        byId("stopScript").disabled = !status.scriptRunning;
+        byId("startButler").disabled = !status.connected || status.butlerRunning;
+        byId("stopButler").disabled = !status.butlerRunning;
+      } catch (error) {
+        byId("connectionDot").classList.remove("online");
+        byId("connectionText").textContent = "Host unavailable";
+        byId("runtimeState").textContent = "Offline";
+        byId("runtimeState").className = "wait";
+      }
+    }
+
+    async function refreshLogs() {
+      try {
+        const logs = await api("/api/logs");
+        const entries = logs[selectedLog] || [];
+        const text = entries.length ? entries.join("\n") : "No log entries yet.";
+        if (text !== lastLogText) {
+          const view = byId("logView");
+          view.textContent = text;
+          view.scrollTop = view.scrollHeight;
+          lastLogText = text;
+        }
+        byId("logCount").textContent = `${entries.length} lines`;
+      } catch (error) {
+        byId("logView").textContent = error.message;
+      }
+    }
+
+    byId("scriptForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      try {
+        const result = await api("/api/script/start", {
+          method: "POST",
+          body: JSON.stringify({ path: byId("scriptPath").value.trim() })
+        });
+        notify(result.message || "Script started.");
+        await refreshStatus();
+      } catch (error) { notify(error.message, true); }
+    });
+
+    byId("stopScript").addEventListener("click", async () => {
+      try {
+        const result = await api("/api/script/stop", { method: "POST", body: "{}" });
+        notify(result.message || "Script stop requested.");
+        await refreshStatus();
+      } catch (error) { notify(error.message, true); }
+    });
+
+    byId("butlerForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      try {
+        const result = await api("/api/butler/start", {
+          method: "POST",
+          body: JSON.stringify({
+            username: byId("butlerUsername").value.trim(),
+            duration: byId("butlerDuration").value.trim() || null
+          })
+        });
+        notify(result.message || "Butler start requested.");
+        await refreshStatus();
+      } catch (error) { notify(error.message, true); }
+    });
+
+    byId("stopButler").addEventListener("click", async () => {
+      try {
+        const result = await api("/api/butler/stop", { method: "POST", body: "{}" });
+        notify(result.message || "Butler stop requested.");
+        await refreshStatus();
+      } catch (error) { notify(error.message, true); }
+    });
+
+    document.querySelectorAll("[data-log]").forEach(button => button.addEventListener("click", () => {
+      document.querySelectorAll("[data-log]").forEach(tab => tab.classList.toggle("active", tab === button));
+      selectedLog = button.dataset.log;
+      lastLogText = "";
+      refreshLogs();
+    }));
+    byId("refreshLogs").addEventListener("click", refreshLogs);
+
+    refreshStatus();
+    refreshLogs();
+    window.setInterval(refreshStatus, 2500);
+    window.setInterval(refreshLogs, 2500);
+  </script>
+</body>
+</html>
