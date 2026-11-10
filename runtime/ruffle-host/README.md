@@ -1,10 +1,16 @@
 # Ruffle host prototype
 
-This folder contains the first browser-side runtime shell. It is intentionally independent from the Avalonia application.
+This folder contains the browser-side runtime shell used by the standalone .NET host.
 
-## Local layout
+## Install runtime assets
 
-Place a self-hosted Ruffle Web distribution in `ruffle/` so that `ruffle/ruffle.js` and its WebAssembly assets are available. Place the Skua-built SWF at `game/skua.swf`.
+Run the installer from PowerShell:
+
+```powershell
+.\Install-Runtime.ps1 -SwfPath "C:\path\to\VibeSkua\Skua.AS3\skua\bin\skua.swf"
+```
+
+The script downloads the pinned Ruffle Web self-hosted release and copies the supplied SWF into the local runtime folder. To use another Ruffle release, pass `-Version`.
 
 Expected layout:
 
@@ -12,23 +18,40 @@ Expected layout:
 runtime/ruffle-host/
 ├── bridge.js
 ├── index.html
+├── Install-Runtime.ps1
 ├── ruffle/
 │   ├── ruffle.js
-│   └── *.wasm / supporting assets
+│   └── supporting WebAssembly assets
 └── game/
     └── skua.swf
 ```
 
-Do not commit the downloaded Ruffle distribution or game SWF. They are runtime assets and are ignored by the repository.
+The downloaded Ruffle distribution and game SWF are local runtime assets and must not be committed.
+
+## Start the host
+
+From the repository root:
+
+```powershell
+dotnet run --project src/HeadlessSkua.Host -- run
+```
+
+Or provide a SWF explicitly:
+
+```powershell
+dotnet run --project src/HeadlessSkua.Host -- run --swf "C:\path\to\skua.swf"
+```
+
+The .NET host starts a localhost-only static server, launches Chromium in headless mode, and waits for Ruffle to report that the SWF has loaded. Press Ctrl+C to stop it.
 
 ## Host integration contract
 
-The .NET host must expose a Playwright binding named `headlessSkuaHostCall` before navigating to this page. It receives:
+The .NET host exposes a Playwright binding named `headlessSkuaHostCall` before navigating to this page. It receives:
 
 - `name`: the ExternalInterface function name called by the SWF.
 - `args`: the normalized argument array.
 
-The page registers the current Skua Externalizer callback names as JavaScript functions. Calls are forwarded asynchronously to .NET and return immediately to ActionScript. This is appropriate for the current host notification callbacks; any callback that requires a synchronous return value must be explicitly identified and handled before the compatibility adapter is considered complete.
+The page registers the Skua Externalizer callback names as JavaScript functions. Calls are forwarded to .NET and return immediately to ActionScript. This is suitable for notifications, but synchronous callback return values still need explicit compatibility work.
 
 To invoke an ActionScript callback registered through `ExternalInterface.addCallback`, call:
 
@@ -40,7 +63,7 @@ The implementation uses Ruffle's versioned `player.ruffle().callExternalInterfac
 
 ## Important
 
-- Serve this folder over localhost HTTP rather than opening `index.html` with a `file://` URL. WebAssembly and game asset loading need correct HTTP response handling.
-- The page enables Ruffle `allowScriptAccess` because this trusted local SWF needs to communicate with the host.
-- Networking is enabled for the AQW client. Do not expose the local host server to the public network.
-- This page is only a runtime bootstrap. It does not yet authenticate, connect, execute scripts, or implement the full `IFlashUtil` adapter.
+- The host serves the player over localhost HTTP; do not open `index.html` directly with `file://`.
+- The page enables script access because this trusted local SWF needs to communicate with the host.
+- Networking is enabled for the AQW client. The local server binds only to loopback.
+- This is a runtime prototype, not yet a complete Skua `IFlashUtil` implementation. It does not authenticate or execute Skua scripts.
