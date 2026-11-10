@@ -188,7 +188,7 @@ internal static class HeadlessLoginFlow
         bot.Servers.LastIP = selectedServer.IP;
         bot.Servers.LastName = selectedServer.Name;
         HeadlessConsole.Info($"Connection request accepted. Waiting for {selectedServer.Name} to finish loading...");
-        bool connected = await WaitForWorldLoadedAsync(bot, sessionState, TimeSpan.FromSeconds(60), cancellationToken);
+        bool connected = await WaitForWorldLoadedAsync(bot, sessionState, TimeSpan.FromSeconds(180), cancellationToken);
         HeadlessConsole.Info($"Selected-server connection phase completed in {serverConnectionTimer.Elapsed.TotalSeconds:F1}s.");
         if (!connected)
         {
@@ -196,10 +196,10 @@ internal static class HeadlessLoginFlow
             string connectionDetail = GetConnectionDetail(bot);
             HeadlessConsole.Error($"The connection to {selectedServer.Name} did not reach a fully loaded player.");
             bool worldReadyForDiagnostics = bot.Flash.IsWorldLoaded;
-            bool avatarReadyForDiagnostics = worldReadyForDiagnostics && !bot.Flash.IsNull("world.myAvatar");
+            bool avatarReadyForDiagnostics = worldReadyForDiagnostics && IsAvatarPresent(bot);
             bool playingForDiagnostics = avatarReadyForDiagnostics && bot.Player.Playing;
             bool playerReadyForDiagnostics = playingForDiagnostics && bot.Player.Loaded;
-            HeadlessConsole.Error($"Connection state: Playing={playingForDiagnostics}, PlayerLoaded={playerReadyForDiagnostics}, WorldLoaded={worldReadyForDiagnostics}.");
+            HeadlessConsole.Error($"Connection state: Playing={playingForDiagnostics}, PlayerLoaded={playerReadyForDiagnostics}, AvatarPresent={avatarReadyForDiagnostics}, WorldLoaded={worldReadyForDiagnostics}.");
             if (!string.IsNullOrWhiteSpace(modalMessage))
                 HeadlessConsole.Error($"Game message: {modalMessage}");
             if (!string.IsNullOrWhiteSpace(connectionDetail) && !string.Equals(connectionDetail, "null", StringComparison.OrdinalIgnoreCase))
@@ -269,11 +269,11 @@ internal static class HeadlessLoginFlow
 
             if (worldReady && !avatarReady)
             {
-                avatarReady = !bot.Flash.IsNull("world.myAvatar");
+                avatarReady = IsAvatarPresent(bot);
                 if (avatarReady)
                 {
-                    HeadlessConsole.Debug($"AQW character avatar appeared after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
-                    nextPlayingCheck = DateTime.MinValue;
+                    HeadlessConsole.Success($"AQW local character detected in the world after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
+                    return true;
                 }
             }
 
@@ -281,11 +281,6 @@ internal static class HeadlessLoginFlow
             {
                 playing = bot.Player.Playing;
                 nextPlayingCheck = now.AddMilliseconds(500);
-                if (playing)
-                {
-                    HeadlessConsole.Success($"AQW character entered the world after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
-                    return true;
-                }
             }
 
             if (now >= nextDiagnostic)
@@ -305,8 +300,32 @@ internal static class HeadlessLoginFlow
 
         cancellationToken.ThrowIfCancellationRequested();
         bool finalWorldReady = bot.Flash.IsWorldLoaded;
-        bool finalAvatarReady = finalWorldReady && !bot.Flash.IsNull("world.myAvatar");
-        return finalAvatarReady && bot.Player.Playing;
+        bool finalAvatarReady = finalWorldReady && IsAvatarPresent(bot);
+        return finalAvatarReady;
+    }
+
+    /// <summary>
+    /// Detects the local player through the explicit world.myAvatar reference first, then
+    /// falls back to the isMyAvatar marker on the world's avatar collection. Some AQW
+    /// initialization paths populate the collection before assigning world.myAvatar.
+    /// </summary>
+    /// <param name="bot">The initialized Skua script interface.</param>
+    /// <returns>True when the local character is present in the current game world.</returns>
+    private static bool IsAvatarPresent(IScriptInterface bot)
+    {
+        if (!bot.Flash.IsNull("world.myAvatar"))
+            return true;
+
+        int avatarCount = bot.Flash.GetGameObject<int>("world.avatars.length", 0);
+        if (avatarCount <= 0)
+            return false;
+
+        int scanCount = Math.Min(avatarCount, 256);
+        for (int index = 0; index < scanCount; index++)
+            if (bot.Flash.GetGameObject<bool>($"world.avatars.{index}.isMyAvatar", false))
+                return true;
+
+        return false;
     }
 
     /// <summary>
@@ -322,14 +341,14 @@ internal static class HeadlessLoginFlow
         DateTime deadline = DateTime.UtcNow.Add(timeout);
         DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
 
-        HeadlessConsole.Info("Waiting for inventory and character assets before starting automation...");
+        HeadlessConsole.Info("Waiting for the local character, inventory, and player assets before starting automation...");
 
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
             bool worldReady = bot.Flash.IsWorldLoaded;
-            bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
+            bool avatarReady = worldReady && IsAvatarPresent(bot);
             bool playing = avatarReady && bot.Player.Playing;
-            bool playerReady = playing && bot.Player.Loaded;
+            bool playerReady = avatarReady && playing && bot.Player.Loaded;
 
             if (playerReady)
             {
