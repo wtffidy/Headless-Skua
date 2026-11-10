@@ -84,8 +84,11 @@ internal static class HeadlessLoginFlow
         // AQW requires the server's XML socket policy before opening its game connection.
         try
         {
+            HeadlessConsole.Debug($"Requesting the XML socket policy from {selectedServer.IP}:{serverPort}...");
             bot.Flash.Call("loadPolicyFile", selectedServer.IP, serverPort);
+            HeadlessConsole.Debug("XML socket policy request queued.");
             bot.Flash.Call("killLoginModals");
+            HeadlessConsole.Debug("Login modals cleared.");
         }
         catch (Exception exception)
         {
@@ -94,6 +97,7 @@ internal static class HeadlessLoginFlow
 
         // Use Skua's normal server-list click path first. It selects the actual row in
         // mcLogin and lets the game client perform its own connection handshake.
+        HeadlessConsole.Debug($"Selecting {selectedServer.Name} through the AQW server list...");
         bool selectedInClient = false;
         try
         {
@@ -104,6 +108,7 @@ internal static class HeadlessLoginFlow
             HeadlessConsole.Debug($"Server-list click was unavailable: {exception.Message}");
         }
 
+        HeadlessConsole.Debug($"AQW server-list selection returned: {selectedInClient}.");
         if (selectedInClient)
             HeadlessConsole.Info($"Selected {selectedServer.Name} through the AQW server list.");
         else
