@@ -105,6 +105,10 @@ internal static class Program
                 Console.WriteLine($"Starting script: {fullScriptPath}");
                 scriptManager.SetLoadedScript(fullScriptPath);
 
+                scriptManager.SilentConfig = true;
+                Trace.Listeners.Add(new ConsoleTraceListener());
+                Trace.AutoFlush = true;
+
                 Exception? scriptException = await scriptManager.StartScript();
 
                 if (scriptException is not null)
@@ -112,9 +116,6 @@ internal static class Program
                     Console.Error.WriteLine($"Script failed to start: {scriptException}");
                     return 3;
                 }
-
-                Trace.Listeners.Add(new ConsoleTraceListener());
-                Trace.AutoFlush = true;
 
                 while (scriptManager.ScriptRunning)
                 {
@@ -133,7 +134,7 @@ internal static class Program
                 }
 
                 Console.WriteLine("Script execution stopped.");
-                return cancellationTokenSource.IsCancellationRequested ? 0 : 0;
+                return 0;
             }
 
             Console.WriteLine("Headless game runtime ready. Press Ctrl+C to stop.");
