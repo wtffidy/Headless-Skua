@@ -219,6 +219,8 @@
         byId("scriptDiagnostics").textContent = status.scriptRunning
           ? `Thread: ${diagnostics.threadState || "Unknown"}${diagnostics.threadId == null ? "" : ` (#${diagnostics.threadId})`}\n\n${diagnostics.stackTrace || "Waiting for the script worker stack…"}`
           : "No script is running.";
+        if (status.scriptRunning && (status.map || "").toLowerCase() === "battleon")
+          byId("scriptDiagnosticsPanel").open = true;
         byId("butlerState").textContent = status.butlerRunning
           ? "Following"
           : !status.butlerAvailable
