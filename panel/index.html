@@ -217,7 +217,7 @@
         byId("scriptState").className = status.scriptRunning ? (status.scriptStopping ? "wait" : "good") : "";
         const diagnostics = status.scriptDiagnostics || {};
         byId("scriptDiagnostics").textContent = status.scriptRunning
-          ? `Thread: ${diagnostics.threadState || "Unknown"}${diagnostics.threadId == null ? "" : ` (#${diagnostics.threadId})`}\n\n${diagnostics.stackTrace || "Waiting for the script worker stack…"}`
+          ? `Thread: ${diagnostics.threadState || "Unknown"}${diagnostics.threadId == null ? "" : ` (#${diagnostics.threadId})`}\nStop requested: ${diagnostics.cancellationRequested ? "yes" : "no"}\n\n${diagnostics.stackTrace || "Waiting for script diagnostics…"}`
           : "No script is running.";
         if (status.scriptRunning && (status.map || "").toLowerCase() === "battleon")
           byId("scriptDiagnosticsPanel").open = true;
