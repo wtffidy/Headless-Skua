@@ -21,6 +21,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     private readonly RuffleRuntime _runtime;
     private readonly ConcurrentDictionary<string, DeferredModuleCall> _deferredModuleCalls = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<(string Function, object[] Arguments)> _hostCalls = new();
+    private readonly ConcurrentDictionary<string, CachedCall> _readCallCache = new(StringComparer.Ordinal);
     private int _flushingDeferredModuleCalls;
     private int _processingHostCalls;
 
@@ -100,8 +101,18 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             if (ShouldDeferModuleCall(function, args) || ShouldSkipUnavailableGameCall(function) || ShouldSkipNullTarget(function, args))
                 return type.IsValueType ? Activator.CreateInstance(type) : null;
 
+            string? cacheKey = GetReadCallCacheKey(function, type, args, out long cacheDurationMilliseconds);
+            long now = Environment.TickCount64;
+            if (cacheKey is not null
+                && _readCallCache.TryGetValue(cacheKey, out CachedCall cachedCall)
+                && now < cachedCall.ExpiresAt)
+                return cachedCall.Value;
+
             JsonElement? result = _runtime.CallActionScriptAsync(function, args).GetAwaiter().GetResult();
             object? converted = ConvertResult(result, type);
+            if (cacheKey is not null)
+                _readCallCache[cacheKey] = new CachedCall(now + cacheDurationMilliseconds, converted);
+
             FlushDeferredModuleCalls();
             return converted;
         }
@@ -223,6 +234,44 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         return !string.IsNullOrWhiteSpace(targetPath) && IsNullPath(targetPath);
     }
 
+    /// <summary>
+    /// Builds a short-lived cache key for read-only game-state calls made repeatedly by Skua's
+    /// 20 ms background timer. Only stable status paths are cached; gameplay commands are never cached.
+    /// </summary>
+    /// <param name="function">The ActionScript bridge function.</param>
+    /// <param name="type">The requested result type.</param>
+    /// <param name="args">Arguments passed to ActionScript.</param>
+    /// <param name="durationMilliseconds">Cache duration in milliseconds.</param>
+    /// <returns>A cache key, or null when this call must always reach ActionScript.</returns>
+    private static string? GetReadCallCacheKey(string function, Type type, object[] args, out long durationMilliseconds)
+    {
+        durationMilliseconds = 0;
+        string? path = args.Length > 0 ? args[0] as string : null;
+
+        if (function == "isLoggedIn" && args.Length == 0)
+            durationMilliseconds = 75;
+        else if (function == "isKicked" && args.Length == 0)
+            durationMilliseconds = 200;
+        else if (function == "isNull" && path is "world" or "world.myAvatar" or "mcLogin.warning" or "mcConnDetail.stage" or "mcLogin.sl.iList")
+            durationMilliseconds = 75;
+        else if (function == "getGameObject" && path is
+            "mcLogin.visible"
+            or "mcLogin.sl.iList.numChildren"
+            or "mcConnDetail.txtDetail.text"
+            or "world.mapLoadInProgress"
+            or "world.myAvatar.items.length"
+            or "world.myAvatar.dataLeaf.intState")
+            durationMilliseconds = 75;
+        else if (function == "callGameFunction0" && path == "world.myAvatar.pMC.artLoaded")
+            durationMilliseconds = 250;
+
+        return durationMilliseconds > 0
+            ? $"{function}\u001f{type.AssemblyQualifiedName}\u001f{path}"
+            : null;
+    }
+
+    private readonly record struct CachedCall(long ExpiresAt, object? Value);
+
     private readonly record struct DeferredModuleCall(string Function, string ModuleName);
 
     /// <inheritdoc />
@@ -250,6 +299,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     public void Dispose()
     {
         _runtime.HostCallReceived -= OnHostCallReceived;
+        _readCallCache.Clear();
     }
 
     /// <summary>
@@ -341,6 +391,9 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     /// <param name="arguments">The callback arguments as JSON.</param>
     private void OnHostCallReceived(string function, JsonElement arguments)
     {
+        if (function.Equals("connectionLost", StringComparison.OrdinalIgnoreCase))
+            _readCallCache.Clear();
+
         object[] values = arguments.ValueKind == JsonValueKind.Array
             ? arguments.EnumerateArray().Select(value => ConvertJsonElement(value)!).ToArray()
             : Array.Empty<object>();
