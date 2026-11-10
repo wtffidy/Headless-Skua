@@ -132,6 +132,11 @@ internal static class Program
             flash.FlashCall += (name, values) =>
             {
                 sessionState.Observe(name, values);
+                if ((string.Equals(name, "packetFromServer", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(name, "pext", StringComparison.OrdinalIgnoreCase))
+                    && values.OfType<string>().Any(value => value.Contains("loginResponse", StringComparison.OrdinalIgnoreCase)))
+                    HeadlessConsole.Debug($"AQW loginResponse packet received through {name}.");
+
                 (bool loginAccepted, string? acceptedAccount) = sessionState.GetSnapshot();
 
                 if (loginAccepted && Interlocked.CompareExchange(ref loginAcceptedLogged, 1, 0) == 0)
