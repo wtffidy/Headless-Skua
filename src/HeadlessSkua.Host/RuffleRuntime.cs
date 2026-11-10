@@ -129,7 +129,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         contentTypes.Mappings[".wasm"] = "application/wasm";
         contentTypes.Mappings[".swf"] = "application/x-shockwave-flash";
 
-        _webApplication.UseDefaultFiles();
+        _webApplication.UseDefaultFiles(new DefaultFilesOptions
+        {
+            FileProvider = new PhysicalFileProvider(_runtimeDirectory)
+        });
         _webApplication.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(_runtimeDirectory),
