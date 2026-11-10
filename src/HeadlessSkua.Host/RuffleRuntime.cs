@@ -61,8 +61,13 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         await StartBrowserAsync(cancellationToken);
 
         string address = GetServerAddress();
-        string swfUrl = new Uri(fullSwfPath).AbsoluteUri;
-        Uri playerUri = new(new Uri(address), $"?swf={Uri.EscapeDataString(swfUrl)}");
+        string localSwfPath = Path.Combine(_runtimeDirectory, "game", "skua.swf");
+        Directory.CreateDirectory(Path.GetDirectoryName(localSwfPath)!);
+
+        if (!string.Equals(fullSwfPath, Path.GetFullPath(localSwfPath), StringComparison.OrdinalIgnoreCase))
+            File.Copy(fullSwfPath, localSwfPath, true);
+
+        Uri playerUri = new(new Uri(address), "?swf=game/skua.swf");
 
         Console.WriteLine($"Runtime page: {playerUri}");
         await _page!.GotoAsync(playerUri.ToString(), new PageGotoOptions
