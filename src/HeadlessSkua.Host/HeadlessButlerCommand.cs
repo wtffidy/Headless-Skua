@@ -106,6 +106,7 @@ internal static class HeadlessButlerCommand
 
             if (!string.Equals(followingWho, username.Trim(), StringComparison.OrdinalIgnoreCase))
             {
+                stopMethod.Invoke(plugin, null);
                 error = "ButlerV5 did not enter a follow session. Check the ButlerV5 plugin log for its reason.";
                 return false;
             }
