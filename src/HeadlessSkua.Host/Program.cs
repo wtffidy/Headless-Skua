@@ -291,7 +291,7 @@ internal static class Program
                 {
                     if (!await HeadlessLoginFlow.WaitForAutomationReadyAsync(
                         scriptInterface,
-                        TimeSpan.FromSeconds(60),
+                        TimeSpan.FromSeconds(180),
                         cancellationTokenSource.Token))
                         return 4;
                 }
