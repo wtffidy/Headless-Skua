@@ -134,14 +134,40 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private IResult GetStatus()
     {
+        bool loggedIn = _bot.Player.LoggedIn;
+        bool alive = _bot.Player.Alive;
         bool worldLoaded = _bot.Flash.IsWorldLoaded;
+        bool connected = loggedIn && alive && worldLoaded;
+        string runtime = !loggedIn
+            ? "Not logged in"
+            : !worldLoaded
+                ? "Loading world"
+                : !alive
+                    ? "Player dead"
+                    : "Connected";
+        string connectionMessage = !loggedIn
+            ? "The panel is online, but AQW login is not complete. Finish login and server selection in the Headless Skua terminal."
+            : !worldLoaded
+                ? "AQW login is complete. Waiting for the game world to finish loading."
+                : !alive
+                    ? "The AQW world is loaded, but the character is not alive yet. Automation will unlock when the character is alive."
+                    : "AQW is connected and ready for scripts and ButlerV5.";
+
+        string? butlerBlockReason = HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
+
         return Results.Ok(new
         {
-            connected = _bot.Player.Playing && worldLoaded,
-            runtime = worldLoaded ? "World loaded" : _bot.Player.Playing ? "Connecting" : "Not connected",
+            connected,
+            loggedIn,
+            alive,
+            worldLoaded,
+            runtime,
+            connectionMessage,
             server = _bot.Servers.LastName,
             scriptRunning = _scriptManager.ScriptRunning,
-            butlerRunning = _butlerTask is { IsCompleted: false }
+            butlerRunning = _butlerTask is { IsCompleted: false },
+            butlerAvailable = butlerBlockReason is null,
+            butlerBlockReason
         });
     }
 
@@ -157,8 +183,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
     {
-        if (!_bot.Player.Playing || !_bot.Flash.IsWorldLoaded)
-            return Results.Conflict(new { error = "Connect to a game server before starting a script." });
+        if (!_bot.Player.LoggedIn || !_bot.Player.Alive || !_bot.Flash.IsWorldLoaded)
+            return Results.Conflict(new { error = "AQW is not ready. Finish login, wait for the game world, and make sure your character is alive." });
         if (_scriptManager.ScriptRunning)
             return Results.Conflict(new { error = "A script is already running." });
         if (string.IsNullOrWhiteSpace(request.Path))
@@ -207,29 +233,38 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private IResult StartButler(ButlerStartRequest request)
     {
-        if (!_bot.Player.Playing || !_bot.Flash.IsWorldLoaded)
-            return Results.Conflict(new { error = "Connect to a game server before starting Butler." });
+        if (!_bot.Player.LoggedIn || !_bot.Player.Alive || !_bot.Flash.IsWorldLoaded)
+            return Results.Conflict(new { error = "AQW is not ready. Finish login, wait for the game world, and make sure your character is alive." });
         if (string.IsNullOrWhiteSpace(request.Username))
             return Results.BadRequest(new { error = "Enter the player name Butler should follow." });
+        if (!HeadlessButlerCommand.TryParseDuration(request.Duration, out TimeSpan? duration))
+            return Results.BadRequest(new { error = "Invalid duration. Use 30m, 2h, 1d, or HH:MM:SS." });
 
         lock (_butlerSync)
         {
             if (_butlerTask is { IsCompleted: false })
                 return Results.Conflict(new { error = "A Butler session is already running." });
 
+            if (!HeadlessButlerCommand.TryStartFollow(_pluginManager, request.Username, out ButlerFollowSession? session, out string? error)
+                || session is null)
+                return Results.Conflict(new { error = error ?? "ButlerV5 could not start." });
+
             _butlerCancellation?.Dispose();
             _butlerCancellation = new CancellationTokenSource();
             CancellationToken token = _butlerCancellation.Token;
             string username = request.Username.Trim();
-            string? duration = string.IsNullOrWhiteSpace(request.Duration) ? null : request.Duration.Trim();
 
             _butlerTask = Task.Run(async () =>
             {
                 try
                 {
-                    int result = await HeadlessButlerCommand.RunAsync(_pluginManager, username, duration, token);
-                    if (result != 0)
-                        HeadlessConsole.Error($"Remote Butler session ended with exit code {result}.");
+                    await HeadlessButlerCommand.WaitForSessionAsync(
+                        session,
+                        duration,
+                        token,
+                        useNamedPipe: false,
+                        unloadPlugin: false,
+                        _pluginManager);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -241,8 +276,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             });
         }
 
-        HeadlessConsole.Info($"Remote panel requested Butler to follow {request.Username.Trim()}.");
-        return Results.Accepted(value: new { message = $"Butler is starting to follow {request.Username.Trim()}." });
+        HeadlessConsole.Success($"Remote panel started ButlerV5 following {request.Username.Trim()}.");
+        return Results.Accepted(value: new { message = $"ButlerV5 is now following {request.Username.Trim()}." });
     }
 
     private IResult StopButler()
@@ -255,7 +290,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             _butlerCancellation.Cancel();
         }
 
-        HeadlessConsole.Warn("Butler stop requested from the remote panel.");
+        HeadlessConsole.Info("Butler stop requested from the remote panel.");
         return Results.Ok(new { message = "Butler stop requested." });
     }
 
@@ -293,6 +328,9 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             catch (TimeoutException)
             {
                 HeadlessConsole.Warn("Butler did not stop before the remote panel shut down.");
+            }
+            catch (OperationCanceledException)
+            {
             }
         }
 
