@@ -63,6 +63,15 @@ Run an existing Skua C# script:
 Build\HeadlessSkua.exe run --script "C:\path\to\YourScript.cs"
 ```
 
+Choose which bundled AQW game client build to test. R8 remains the default:
+
+```bat
+Build\HeadlessSkua.exe run --game-version r8
+Build\HeadlessSkua.exe run --game-version r4
+```
+
+Both clients live in `runtime\ruffle-host\game`. The R4 option requires `Game4000r4.swf` to be present; the R8 option falls back to AQW's online game client if its local file is missing.
+
 Run ButlerV5:
 
 ```bat
