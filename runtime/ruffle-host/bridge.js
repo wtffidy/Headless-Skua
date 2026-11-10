@@ -6,7 +6,6 @@
     "requestLoadGame",
     "pre-load",
     "loaded",
-    "debug",
     "pext",
     "connectionLost",
     "userIntentionalAction",
