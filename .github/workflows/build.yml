@@ -55,8 +55,12 @@ jobs:
           $driverSource = "src/HeadlessSkua.Host/bin/Release/net10.0/.playwright"
           if (-not (Test-Path (Join-Path $driverSource "node/win32_x64/node.exe"))) { throw "Playwright Node driver is missing from the build output." }
           if (-not (Test-Path (Join-Path $driverSource "package/cli.js"))) { throw "Playwright CLI is missing from the build output." }
-          Copy-Item $driverSource (Join-Path $publishDir ".playwright") -Recurse -Force
-          Copy-Item "runtime/ruffle-host" (Join-Path $publishDir "runtime/ruffle-host") -Recurse -Force
+          $publishedDriver = Join-Path $publishDir ".playwright"
+          $publishedRuntime = Join-Path $publishDir "runtime/ruffle-host"
+          New-Item -ItemType Directory -Path $publishedDriver -Force | Out-Null
+          New-Item -ItemType Directory -Path $publishedRuntime -Force | Out-Null
+          Copy-Item (Join-Path $driverSource "*") $publishedDriver -Recurse -Force
+          Copy-Item "runtime/ruffle-host/*" $publishedRuntime -Recurse -Force
 
           if (-not (Test-Path (Join-Path $publishDir "panel/index.html"))) { throw "Remote panel assets were not published." }
           if (-not (Test-Path (Join-Path $publishDir ".playwright/node/win32_x64/node.exe"))) { throw "Published Playwright Node driver is missing." }
