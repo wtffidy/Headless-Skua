@@ -311,13 +311,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         if (!_bot.Flash.IsNull("world.myAvatar"))
             return true;
 
-        int avatarCount = _bot.Flash.GetGameObject<int>("world.avatars.length", 0);
-        int scanCount = Math.Min(Math.Max(avatarCount, 0), 256);
-        for (int index = 0; index < scanCount; index++)
-            if (_bot.Flash.GetGameObject<bool>($"world.avatars.{index}.isMyAvatar", false))
-                return true;
-
-        return false;
+        List<bool> localAvatarFlags = _bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
+        return localAvatarFlags.Contains(true);
     }
 
     /// <summary>
