@@ -141,7 +141,7 @@
       // returned. This avoids re-entering Chromium while it is servicing a host call.
       window.setTimeout(() => {
         try {
-          Promise.resolve(player.ruffle().callExternalInterface(name, args)).catch(error => {
+          Promise.resolve(player.ruffle().callExternalInterface(name, ...args)).catch(error => {
             console.error("[HeadlessSkua] ActionScript dispatch failed:", name, error);
           });
         } catch (error) {
@@ -165,7 +165,7 @@
         throw new TypeError("ActionScript callback arguments must be an array.");
       }
 
-      return player.ruffle().callExternalInterface(name, args);
+      return player.ruffle().callExternalInterface(name, ...args);
     },
 
     getStatus() {
