@@ -515,7 +515,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         _page.Console += (_, message) =>
         {
-            if (HeadlessConsole.Quiet || message.Type is "log" or "info" or "debug")
+            if (HeadlessConsole.Quiet
+                || message.Type is "log" or "info" or "debug"
+                || message.Text.Contains("GPU stall due to ReadPixels", StringComparison.OrdinalIgnoreCase)
+                || message.Text.Contains("Failed to load resource: the server responded with a status of 404", StringComparison.OrdinalIgnoreCase))
                 return;
 
             TerminalLogLevel level = message.Type == "error" ? TerminalLogLevel.Error : TerminalLogLevel.Warn;
