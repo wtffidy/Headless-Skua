@@ -216,8 +216,19 @@ internal static class HeadlessLoginFlow
     private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, TimeSpan timeout, CancellationToken cancellationToken)
     {
         DateTime deadline = DateTime.UtcNow.Add(timeout);
+        DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
+            if (DateTime.UtcNow >= nextDiagnostic)
+            {
+                bool loginDataLoaded = !bot.Flash.IsNull("objLogin");
+                bool serverDataLoaded = !bot.Flash.IsNull("objServerInfo");
+                bool worldLoaded = bot.Flash.IsWorldLoaded;
+                bool avatarLoaded = worldLoaded && !bot.Flash.IsNull("world.myAvatar");
+                HeadlessConsole.Debug($"AQW initialization: objLogin={loginDataLoaded}, objServerInfo={serverDataLoaded}, world={worldLoaded}, avatar={avatarLoaded}.");
+                nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+            }
+
             // Player.Playing reads world.myAvatar state. Do not query it until the
             // world and avatar clips exist, otherwise early login can hit Error #1009.
             if (bot.Flash.IsWorldLoaded
