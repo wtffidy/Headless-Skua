@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Skua.Headless.UI;
 
@@ -112,6 +113,36 @@ public sealed class Spinner : IDisposable
     }
 
     public void Dispose() => Stop();
+}
+
+internal static class HeadlessLogRedactor
+{
+    private static readonly Regex LoginPayloadRegex = new(
+        @"<login\\b[^>]*>.*?</login\\s*>",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
+    private static readonly Regex PasswordTagRegex = new(
+        @"(<(?:pword|password|passwd)\\b[^>]*>).*?(</(?:pword|password|passwd)\\s*>)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
+    private static readonly Regex JsonPasswordRegex = new(
+        @"([""'](?:password|pword|passwd)[""']\\s*:\\s*[""'])(.*?)([""'])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Removes credentials from AQW login packets and common structured log payloads.
+    /// </summary>
+    /// <param name="message">The original log message.</param>
+    /// <returns>A safe message suitable for console and dashboard output.</returns>
+    public static string Redact(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return message ?? string.Empty;
+
+        string redacted = LoginPayloadRegex.Replace(message, "<login>[REDACTED]</login>");
+        redacted = PasswordTagRegex.Replace(redacted, "$1[REDACTED]$2");
+        return JsonPasswordRegex.Replace(redacted, "$1[REDACTED]$3");
+    }
 }
 
 public static class HeadlessConsole
@@ -285,6 +316,7 @@ public static class HeadlessConsole
     // ───────────────────────── Logging ─────────────────────────
     public static void Log(LogLevel level, string message)
     {
+        message = HeadlessLogRedactor.Redact(message);
         (string tag, Rgb color) = level switch
         {
             LogLevel.Debug => ("DBG", _theme.Debug),
