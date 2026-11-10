@@ -90,6 +90,30 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     }
 
     /// <summary>
+    /// Queues an ActionScript ExternalInterface callback after the current browser evaluation returns.
+    /// </summary>
+    /// <param name="functionName">Callback name registered by ActionScript.</param>
+    /// <param name="arguments">Arguments passed to the callback.</param>
+    public async Task DispatchActionScriptAsync(string functionName, object?[]? arguments = null)
+    {
+        if (_page is null)
+            throw new InvalidOperationException("The Ruffle runtime has not started.");
+
+        await _pageLock.WaitAsync();
+
+        try
+        {
+            await _page.EvaluateAsync<bool>(
+                "payload => window.__headlessSkua.dispatchActionScript(payload.name, payload.args)",
+                new { name = functionName, args = arguments ?? Array.Empty<object>() });
+        }
+        finally
+        {
+            _pageLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Invokes an ActionScript ExternalInterface callback registered by the SWF.
     /// </summary>
     /// <param name="functionName">Callback name registered by ActionScript.</param>
