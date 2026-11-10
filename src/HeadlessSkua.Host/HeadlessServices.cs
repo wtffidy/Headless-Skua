@@ -32,9 +32,10 @@ internal static class HeadlessServices
         services.AddSingleton<ILogService, HeadlessLogService>();
         services.AddTransient(Skua.Core.AppStartup.Services.CreateCompiler);
 
+        services.AddSingleton<ScriptManager>();
+        services.AddSingleton<IScriptManager>(provider => provider.GetRequiredService<ScriptManager>());
+        services.AddSingleton<IScriptStatus>(provider => provider.GetRequiredService<ScriptManager>());
         services.AddSingleton<IScriptInterface, ScriptInterface>();
-        services.AddSingleton<IScriptManager, ScriptManager>();
-        services.AddSingleton<IScriptStatus, ScriptManager>();
 
         services.AddSingleton<IScriptInventoryHelper, ScriptInventoryHelper>();
         services.AddSingleton<IScriptInventory, ScriptInventory>();
