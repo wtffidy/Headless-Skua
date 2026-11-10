@@ -46,10 +46,30 @@ Headless-Skua/
 
 ## Build
 
+Clone with the pinned VibeSkua source submodule:
+
 ```powershell
+git clone --recurse-submodules https://github.com/wtffidy/Headless-Skua.git
+cd Headless-Skua
 dotnet build HeadlessSkua.sln
-dotnet run --project src/HeadlessSkua.Host -- --help
 ```
+
+If the repository was cloned without submodules, initialize them with `git submodule update --init --recursive`.
+
+Install the headless browser and Ruffle assets:
+
+```powershell
+pwsh src/HeadlessSkua.Host/bin/Debug/net10.0/playwright.ps1 install chromium
+pwsh runtime/ruffle-host/Install-Runtime.ps1 -SwfPath "C:\\path\\to\\skua.swf"
+```
+
+Start the runtime:
+
+```powershell
+dotnet run --project src/HeadlessSkua.Host -- run
+```
+
+Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites.
 
 ## Current milestones
 
