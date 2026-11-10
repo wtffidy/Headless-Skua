@@ -554,8 +554,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            Exception actualException = exception is TargetInvocationException { InnerException: not null } invocationException
-                ? invocationException.InnerException
+            Exception actualException = exception is TargetInvocationException invocationException
+                ? invocationException.InnerException ?? exception
                 : exception;
             HeadlessConsole.Error($"VibeSkua script stop failed: {actualException.Message}");
             _scriptManager.ScriptCts?.Cancel();
