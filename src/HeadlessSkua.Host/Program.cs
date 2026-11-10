@@ -21,10 +21,26 @@ internal static class Program
         HeadlessConsole.Init(args);
         HeadlessConsole.Banner(Version);
 
-        // Double-clicking the published executable should start the normal headless session.
-        // Help remains available when explicitly requested from a terminal.
+        // Double-clicking the executable starts the normal headless session.
+        // Keep the console visible on startup failure so the error can be read.
         if (args.Length == 0)
-            return await RunAsync(new[] { "run" });
+        {
+            int exitCode = await RunAsync(new[] { "run" });
+            if (exitCode != 0 && !Console.IsInputRedirected)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Headless Skua stopped with exit code {exitCode}. Press any key to close this window...");
+                try
+                {
+                    Console.ReadKey(intercept: true);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+
+            return exitCode;
+        }
 
         if (args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
@@ -261,11 +277,20 @@ internal static class Program
     /// <returns>The available runtime directory.</returns>
     private static string GetDefaultRuntimeDirectory()
     {
-        string applicationRuntime = Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host");
-        if (Directory.Exists(applicationRuntime))
-            return applicationRuntime;
+        foreach (string startPath in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            DirectoryInfo? directory = new(Path.GetFullPath(startPath));
+            while (directory is not null)
+            {
+                string candidate = Path.Combine(directory.FullName, "runtime", "ruffle-host");
+                if (File.Exists(Path.Combine(candidate, "index.html")))
+                    return candidate;
 
-        return Path.Combine(Environment.CurrentDirectory, "runtime", "ruffle-host");
+                directory = directory.Parent;
+            }
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host");
     }
 
     /// <summary>
