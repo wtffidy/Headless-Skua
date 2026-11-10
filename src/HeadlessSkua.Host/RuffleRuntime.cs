@@ -10,6 +10,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Skua.Headless.UI;
+using TerminalLogLevel = Skua.Headless.UI.LogLevel;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Playwright;
@@ -167,12 +168,12 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         _page.Console += (_, message) =>
         {
-            LogLevel level = message.Type switch
+            TerminalLogLevel level = message.Type switch
             {
-                "error" => LogLevel.Error,
-                "warning" => LogLevel.Warn,
-                "debug" => LogLevel.Debug,
-                _ => LogLevel.Info
+                "error" => TerminalLogLevel.Error,
+                "warning" => TerminalLogLevel.Warn,
+                "debug" => TerminalLogLevel.Debug,
+                _ => TerminalLogLevel.Info
             };
             HeadlessConsole.Log(level, $"[Browser] {message.Text}");
         };
