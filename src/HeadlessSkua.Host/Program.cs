@@ -103,7 +103,29 @@ internal static class Program
                 Console.WriteLine($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
 
                 if (string.Equals(name, "loaded", StringComparison.OrdinalIgnoreCase))
+                {
                     swfLoaded.TrySetResult();
+                    return;
+                }
+
+                // The SWF asks its host to begin loading AQW after Externalizer initializes.
+                // Invoke loadClient only after the browser callback has returned; calling back
+                // into the same Playwright page inline can deadlock the exposed binding.
+                if (string.Equals(name, "requestLoadGame", StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            flash.Call("loadClient");
+                            HeadlessConsole.Success("AQW game-load request dispatched to the SWF.");
+                        }
+                        catch (Exception exception)
+                        {
+                            HeadlessConsole.Error($"Unable to dispatch the AQW game-load request: {exception.Message}");
+                        }
+                    });
+                }
             };
 
             await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
