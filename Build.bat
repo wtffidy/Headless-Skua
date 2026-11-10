@@ -89,7 +89,7 @@ echo.
 echo Copying runtime assets into the Visual Studio build output...
 set "DEV_OUTPUT_DIR=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0"
 if exist "%DEV_OUTPUT_DIR%\runtime\ruffle-host" rmdir /s /q "%DEV_OUTPUT_DIR%\runtime\ruffle-host"
-xcopy "runtime\ruffle-host" "%DEV_OUTPUT_DIR%\runtime\ruffle-host\\" /E /I /Y >nul
+xcopy "runtime\ruffle-host" "%DEV_OUTPUT_DIR%\runtime\ruffle-host\" /E /I /Y >nul
 if errorlevel 1 goto :failed
 
 echo.
