@@ -444,6 +444,53 @@ public static class HeadlessConsole
     }
 
     // Single choke point so concurrent bot threads never interleave escape codes
+    /// <summary>Writes an interactive prompt and reads one line from the terminal.</summary>
+    public static string? Prompt(string label)
+    {
+        lock (_lock)
+        {
+            Console.Write($"{_theme.Accent.Fg}{label}{Reset} ");
+            return Console.ReadLine();
+        }
+    }
+
+    /// <summary>Reads a password without echoing its characters to the terminal.</summary>
+    public static string ReadSecret(string label)
+    {
+        lock (_lock)
+        {
+            Console.Write($"{_theme.Accent.Fg}{label}{Reset} ");
+            StringBuilder password = new();
+            while (true)
+            {
+                ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    Console.WriteLine();
+                    return password.ToString();
+                }
+
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (password.Length == 0)
+                        continue;
+
+                    password.Length--;
+                    if (Ansi.On)
+                        Console.Write("\b \b");
+                    continue;
+                }
+
+                if (!char.IsControl(key.KeyChar))
+                {
+                    password.Append(key.KeyChar);
+                    if (Ansi.On)
+                        Console.Write('•');
+                }
+            }
+        }
+    }
+
     private static void Write(string text)
     {
         lock (_lock)
