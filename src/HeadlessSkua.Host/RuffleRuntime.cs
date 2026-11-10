@@ -24,6 +24,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     private IBrowser? _browser;
     private IBrowserContext? _browserContext;
     private IPage? _page;
+    private readonly SemaphoreSlim _pageLock = new(1, 1);
 
     /// <summary>
     /// Raised when the SWF invokes one of the registered ExternalInterface functions.
@@ -95,9 +96,18 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         if (_page is null)
             throw new InvalidOperationException("The Ruffle runtime has not started.");
 
-        return await _page.EvaluateAsync<JsonElement?>(
-            "payload => window.__headlessSkua.callActionScript(payload.name, payload.args)",
-            new { name = functionName, args = arguments ?? Array.Empty<object>() });
+        await _pageLock.WaitAsync();
+
+        try
+        {
+            return await _page.EvaluateAsync<JsonElement?>(
+                "payload => window.__headlessSkua.callActionScript(payload.name, payload.args)",
+                new { name = functionName, args = arguments ?? Array.Empty<object>() });
+        }
+        finally
+        {
+            _pageLock.Release();
+        }
     }
 
     /// <summary>
@@ -193,5 +203,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         if (_webApplication is not null)
             await _webApplication.StopAsync();
+
+        _pageLock.Dispose();
     }
 }
