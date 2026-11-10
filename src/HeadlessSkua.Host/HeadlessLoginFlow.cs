@@ -30,20 +30,15 @@ internal static class HeadlessLoginFlow
         HeadlessConsole.Info($"Authenticating {username}...");
         bot.Servers.Login(username, password);
 
-        List<Server> servers = await bot.Servers.GetServers(true);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (servers.Count == 0)
+        if (!await WaitForServerListAsync(bot, cancellationToken))
         {
-            HeadlessConsole.Error("The game server API did not return any servers.");
+            HeadlessConsole.Error("Login did not reach the game server-selection screen. Check the credentials and try again.");
             return false;
         }
 
+        List<Server> servers = bot.Servers.ServerList.ToList();
         if (servers.Count == 0)
-        {
-            HeadlessConsole.Error("The game did not provide a server list.");
-            return false;
-        }
+            servers = await bot.Servers.GetServers(true);
 
         List<Server> selectableServers = servers
             .Where(server => !string.IsNullOrWhiteSpace(server.Name) && !string.IsNullOrWhiteSpace(server.IP) && server.Online)
@@ -114,6 +109,54 @@ internal static class HeadlessLoginFlow
             ("Server", selectedServer.Name),
             ("Mode", "Headless"));
         return true;
+    }
+
+    private static async Task<bool> WaitForServerListAsync(IScriptInterface bot, CancellationToken cancellationToken)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(90);
+        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            string? modalMessage = bot.Flash.Call<string>("getActiveModalMessage");
+            if (!string.IsNullOrWhiteSpace(modalMessage) && !string.Equals(modalMessage, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                HeadlessConsole.Error($"Login rejected: {modalMessage.Trim()}");
+                try
+                {
+                    bot.Flash.Call("killLoginModals");
+                }
+                catch (Exception exception)
+                {
+                    HeadlessConsole.Debug($"Could not dismiss the login dialog: {exception.Message}");
+                }
+
+                return false;
+            }
+
+            bool loginVisible = bot.Flash.GetGameObject<bool>("mcLogin.visible", false);
+            bool serverListExists = !bot.Flash.IsNull("mcLogin.sl.iList");
+            int serverEntries = bot.Flash.GetGameObject<int>("mcLogin.sl.iList.numChildren", 0);
+            bool hasServerData = bot.Servers.ServerList.Any(server =>
+                !string.IsNullOrWhiteSpace(server.Name) && !string.IsNullOrWhiteSpace(server.IP));
+
+            if (loginVisible && serverListExists && serverEntries > 0 && hasServerData)
+            {
+                try
+                {
+                    bot.Flash.Call("loadPolicyFiles");
+                }
+                catch (Exception exception)
+                {
+                    HeadlessConsole.Debug($"Policy file preload was unavailable: {exception.Message}");
+                }
+
+                return true;
+            }
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return false;
     }
 
     private static (string Username, string Password) SelectAccount(IScriptInterface bot)
