@@ -114,6 +114,17 @@ internal static class Program
         Stopwatch startupTimer = Stopwatch.StartNew();
         string runtimeDirectory = GetOption(args, "--runtime-dir") ?? GetDefaultRuntimeDirectory();
         string swfPath = GetOption(args, "--swf") ?? Path.Combine(runtimeDirectory, "game", "skua.swf");
+        string gameVersion = GetOption(args, "--game-version") ?? "r8";
+        if (!gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase)
+            && !gameVersion.Equals("r8", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("The game version must be either r4 or r8.", "--game-version");
+
+        string gameClientFileName = $"Game4000{gameVersion.ToLowerInvariant()}.swf";
+        string gameClientPath = Path.Combine(runtimeDirectory, "game", gameClientFileName);
+        if (gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase) && !File.Exists(gameClientPath))
+            throw new FileNotFoundException("The R4 game client was selected but is not installed in the runtime game folder.", gameClientPath);
+
+        HeadlessConsole.Info($"Selected AQW game client: {gameClientFileName}.");
         using CancellationTokenSource cancellationTokenSource = new();
 
         ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
@@ -215,7 +226,7 @@ internal static class Program
                 }
             };
 
-            await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
+            await runtime.StartAsync(swfPath, gameClientFileName, cancellationTokenSource.Token);
             HeadlessConsole.Info($"Ruffle browser started in {startupTimer.Elapsed.TotalSeconds:F1}s.");
             HeadlessConsole.Info("Waiting for the Skua ActionScript client to initialize...");
             await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
@@ -480,7 +491,9 @@ internal static class Program
               -butler stop        Stop the active headless ButlerV5 session.
 
             Run options:
-              --swf <path>       Path to the Skua SWF (defaults to runtime game/skua.swf).
+              --swf <path>       Path to the Skua bootstrap SWF (defaults to runtime game/skua.swf).
+              --game-version <r4|r8>
+                                 AQW game client build to load locally (default: r8).
               --runtime-dir <path>
                                  Ruffle host directory (defaults to runtime/ruffle-host).
               --script <path>   Existing Skua C# script to execute after client initialization.
