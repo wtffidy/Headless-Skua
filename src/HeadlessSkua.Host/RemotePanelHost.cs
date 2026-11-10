@@ -183,10 +183,12 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                     : !playerLoaded
                         ? "The character avatar exists, but VibeSkua is still waiting for inventory data, map loading, and character assets. Scripts will unlock when Player.Loaded is true."
                         : !alive
-                            ? "The AQW character is loaded, but not alive yet. Automation will unlock when the character is alive."
+                            ? "The AQW character and script services are ready. ButlerV5 will unlock when the character is alive."
                             : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
 
-        string? butlerBlockReason = HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
+        string? butlerBlockReason = !alive
+            ? "ButlerV5 requires the AQW character to be alive."
+            : HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
 
         return Results.Ok(new
         {
