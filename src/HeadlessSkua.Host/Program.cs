@@ -127,10 +127,17 @@ internal static class Program
             using RuffleFlashUtil flash = new(runtime);
             HeadlessSessionState sessionState = new();
             TaskCompletionSource swfLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            int loginAcceptedLogged = 0;
 
             flash.FlashCall += (name, values) =>
             {
                 sessionState.Observe(name, values);
+                (bool loginAccepted, string? acceptedAccount) = sessionState.GetSnapshot();
+
+                if (loginAccepted && Interlocked.CompareExchange(ref loginAcceptedLogged, 1, 0) == 0)
+                    HeadlessConsole.Success($"AQW accepted the game login{(string.IsNullOrWhiteSpace(acceptedAccount) ? string.Empty : $" for {acceptedAccount}")}.");
+                else if (string.Equals(name, "connectionLost", StringComparison.OrdinalIgnoreCase))
+                    Interlocked.Exchange(ref loginAcceptedLogged, 0);
 
                 if (!HeadlessConsole.Quiet
                     && !name.Equals("packetFromServer", StringComparison.OrdinalIgnoreCase)
