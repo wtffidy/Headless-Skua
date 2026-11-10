@@ -93,7 +93,10 @@
 
       const ruffleConfig = {
         ...(window.RufflePlayer.config || {}),
-        socketProxy
+        socketProxy,
+        // Pin the current preferred Ruffle renderer. Chromium is launched with
+        // GPU support; SwiftShader remains available as a software fallback.
+        preferredRenderer: "wgpu-webgl"
       };
 
       if (new URLSearchParams(window.location.search).has("quiet")) {
@@ -166,6 +169,18 @@
       }
 
       return player.ruffle().callExternalInterface(name, ...args);
+    },
+
+    getGraphicsInfo() {
+      const canvas = document.createElement("canvas");
+      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+      const debugInfo = gl?.getExtension("WEBGL_debug_renderer_info") || null;
+      return {
+        webGpuAvailable: Boolean(navigator.gpu),
+        webglAvailable: Boolean(gl),
+        renderer: debugInfo && gl ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "unavailable",
+        vendor: debugInfo && gl ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "unavailable"
+      };
     },
 
     getStatus() {
