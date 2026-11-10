@@ -241,7 +241,7 @@ internal static class Program
                     await remotePanel.StartAsync(cancellationTokenSource.Token);
 
                 if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
-                    && !await HeadlessLoginFlow.LoginAsync(scriptInterface, cancellationTokenSource.Token))
+                    && !await HeadlessLoginFlow.LoginAsync(scriptInterface, sessionState, cancellationTokenSource.Token))
                     return 4;
 
                 string? butlerTarget = GetOption(args, "--butler");
