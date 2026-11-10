@@ -37,7 +37,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private Task? _scriptStopTask;
     private CancellationTokenSource? _statusMonitorCancellation;
     private Task? _statusMonitorTask;
-    private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, false, null, null, null, null, null);
+    private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, false, null, null, null, false, false, null, null);
 
     /// <summary>
     /// Creates the dashboard host. It binds to loopback unless remote access is explicitly enabled.
@@ -203,6 +203,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             connectionMessage,
             server,
             map = snapshot.Map,
+            mapLoaded = snapshot.MapLoaded,
+            mapLoading = snapshot.MapLoading,
             level = snapshot.Level,
             gold = snapshot.Gold,
             scriptRunning = _scriptManager.ScriptRunning,
@@ -244,11 +246,13 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                     ? acceptedAccount
                     : worldLoaded ? _bot.Player.Username : null;
                 string? map = avatarLoaded ? _bot.Map.Name : null;
+                bool mapLoading = avatarLoaded && _bot.Map.Loading;
+                bool mapLoaded = avatarLoaded && _bot.Map.Loaded;
                 int? level = avatarLoaded ? _bot.Player.Level : null;
                 int? gold = avatarLoaded ? _bot.Player.Gold : null;
 
                 lock (_statusSync)
-                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, playerLoaded, alive, account, server, map, level, gold);
+                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, playerLoaded, alive, account, server, map, mapLoaded, mapLoading, level, gold);
             }
             catch (Exception exception)
             {
@@ -733,7 +737,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
     }
 
-    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool AvatarLoaded, bool PlayerLoaded, bool Alive, string? Account, string? Server, string? Map, int? Level, int? Gold);
+    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool AvatarLoaded, bool PlayerLoaded, bool Alive, string? Account, string? Server, string? Map, bool MapLoaded, bool MapLoading, int? Level, int? Gold);
     private sealed record ScriptStartRequest(string? Path);
     private sealed record ButlerStartRequest(string? Username, string? Duration);
 }
