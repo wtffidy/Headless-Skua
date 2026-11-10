@@ -125,7 +125,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private void MapApi(WebApplication app)
     {
         app.MapGet("/api/status", GetStatus);
-        app.MapGet("/api/scripts", GetScripts);
+        app.MapGet("/api/scripts", (string? path) => GetScripts(path));
         app.MapGet("/api/logs", GetLogs);
         app.MapPost("/api/script/start", StartScriptAsync);
         app.MapPost("/api/script/stop", StopScript);
@@ -136,23 +136,24 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private IResult GetStatus()
     {
         bool loggedIn = _bot.Player.LoggedIn;
-        bool worldLoaded = _bot.Flash.IsWorldLoaded;
-        bool alive = loggedIn && _bot.Player.Alive;
-        bool connected = loggedIn && alive && worldLoaded;
+        bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
+        bool alive = loggedIn && worldLoaded && _bot.Player.Alive;
+        bool connected = loggedIn && worldLoaded && alive;
+        string? account = loggedIn ? _bot.Player.Username : null;
         string runtime = !loggedIn
             ? "Not logged in"
             : !worldLoaded
-                ? "Loading world"
+                ? "Login accepted · loading world"
                 : !alive
-                    ? "Player dead"
+                    ? "World loaded · character not alive"
                     : "Connected";
         string connectionMessage = !loggedIn
-            ? "The panel is online, but AQW login is not complete. Finish login and server selection in the Headless Skua terminal."
+            ? "AQW has not confirmed the login yet. The panel API is online, but the game session is not authenticated."
             : !worldLoaded
-                ? "AQW login is complete. Waiting for the game world to finish loading."
+                ? $"AQW accepted the login{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" for {account}")}. The game world is still loading; automation unlocks when the character is ready."
                 : !alive
                     ? "The AQW world is loaded, but the character is not alive yet. Automation will unlock when the character is alive."
-                    : "AQW is connected and ready for scripts and ButlerV5.";
+                    : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
 
         string? butlerBlockReason = HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
 
@@ -160,8 +161,11 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         {
             connected,
             loggedIn,
+            loginState = loggedIn ? "Accepted" : "Waiting",
+            account,
             alive,
             worldLoaded,
+            worldState = worldLoaded ? "Loaded" : loggedIn ? "Loading" : "Waiting",
             runtime,
             connectionMessage,
             server = _bot.Servers.LastName,
@@ -172,38 +176,78 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         });
     }
 
-    private IResult GetScripts()
+    private IResult GetScripts(string? relativeDirectory)
     {
-        string scriptsDirectory = ClientFileSources.SkuaScriptsDIR;
-        if (!Directory.Exists(scriptsDirectory))
-            return Results.Ok(new { directory = scriptsDirectory, scripts = Array.Empty<object>() });
+        string scriptsRoot = Path.GetFullPath(ClientFileSources.SkuaScriptsDIR);
+        Directory.CreateDirectory(scriptsRoot);
+
+        string requestedPath = (relativeDirectory ?? string.Empty).Replace('\\', '/').Trim('/');
+        if (Path.IsPathRooted(relativeDirectory ?? string.Empty)
+            || requestedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+            return Results.BadRequest(new { error = "The explorer can only browse inside the VibeSkua Scripts folder." });
 
         try
         {
-            EnumerationOptions options = new()
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
-            };
+            string currentDirectory = requestedPath.Length == 0
+                ? scriptsRoot
+                : Path.GetFullPath(Path.Combine(scriptsRoot, requestedPath.Replace('/', Path.DirectorySeparatorChar)));
+            string rootPrefix = Path.EndsInDirectorySeparator(scriptsRoot) ? scriptsRoot : scriptsRoot + Path.DirectorySeparatorChar;
 
-            object[] scripts = Directory.EnumerateFiles(scriptsDirectory, "*.cs", options)
-                .Select(path => new
-                {
-                    name = Path.GetRelativePath(scriptsDirectory, path).Replace(Path.DirectorySeparatorChar, '/'),
-                    path = Path.GetFullPath(path)
-                })
-                .OrderBy(script => script.name, StringComparer.OrdinalIgnoreCase)
+            if (!string.Equals(currentDirectory, scriptsRoot, StringComparison.OrdinalIgnoreCase)
+                && !currentDirectory.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = "The explorer path is outside the VibeSkua Scripts folder." });
+
+            string cursor = scriptsRoot;
+            foreach (string segment in requestedPath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                cursor = Path.Combine(cursor, segment);
+                if ((File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                    return Results.BadRequest(new { error = "The explorer cannot follow symbolic links or junctions." });
+            }
+
+            if (!Directory.Exists(currentDirectory))
+                return Results.NotFound(new { error = "That folder no longer exists." });
+
+            DirectoryInfo directory = new(currentDirectory);
+            object[] folders = directory.EnumerateDirectories()
+                .Where(folder => (folder.Attributes & (FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint)) == 0)
+                .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
                 .Take(500)
-                .Cast<object>()
+                .Select(folder => (object)new
+                {
+                    name = folder.Name,
+                    path = string.IsNullOrEmpty(requestedPath) ? folder.Name : $"{requestedPath}/{folder.Name}"
+                })
                 .ToArray();
 
-            return Results.Ok(new { directory = scriptsDirectory, scripts });
+            object[] files = directory.EnumerateFiles("*.cs")
+                .Where(file => (file.Attributes & (FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint)) == 0)
+                .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(1000)
+                .Select(file => (object)new
+                {
+                    name = file.Name,
+                    path = string.IsNullOrEmpty(requestedPath) ? file.Name : $"{requestedPath}/{file.Name}"
+                })
+                .ToArray();
+
+            string? parentPath = string.IsNullOrEmpty(requestedPath)
+                ? null
+                : Path.GetDirectoryName(requestedPath.Replace('/', Path.DirectorySeparatorChar))?.Replace(Path.DirectorySeparatorChar, '/');
+
+            return Results.Ok(new
+            {
+                root = "Scripts",
+                directory = requestedPath,
+                parentPath,
+                folders,
+                files
+            });
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            HeadlessConsole.Error($"Could not enumerate Skua scripts for the remote panel: {exception.Message}");
-            return Results.Problem("The Skua scripts folder could not be read.");
+            HeadlessConsole.Error($"Could not browse the VibeSkua Scripts folder: {exception.Message}");
+            return Results.Problem("The VibeSkua Scripts folder could not be browsed.");
         }
     }
 
@@ -224,20 +268,49 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         if (_scriptManager.ScriptRunning)
             return Results.Conflict(new { error = "A script is already running." });
         if (string.IsNullOrWhiteSpace(request.Path))
-            return Results.BadRequest(new { error = "Enter the full path to a script on the Headless Skua computer." });
+            return Results.BadRequest(new { error = "Choose a .cs script from the Scripts explorer first." });
 
-        string fullPath;
+        string scriptsRoot = Path.GetFullPath(ClientFileSources.SkuaScriptsDIR);
+        string relativePath = request.Path.Replace('\\', '/').Trim('/');
+        if (Path.IsPathRooted(request.Path)
+            || relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..")
+            || !relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { error = "Choose a C# script from inside the VibeSkua Scripts folder." });
+
+        string fullPath = Path.GetFullPath(Path.Combine(scriptsRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        string rootPrefix = Path.EndsInDirectorySeparator(scriptsRoot) ? scriptsRoot : scriptsRoot + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { error = "The selected script is outside the VibeSkua Scripts folder." });
+
         try
         {
-            fullPath = Path.GetFullPath(request.Path);
+            string cursor = scriptsRoot;
+            string[] segments = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            for (int index = 0; index < segments.Length; index++)
+            {
+                cursor = Path.Combine(cursor, segments[index]);
+                FileAttributes attributes = File.GetAttributes(cursor);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    return Results.BadRequest(new { error = "Scripts inside symbolic links or junctions cannot be run from the panel." });
+                if (index < segments.Length - 1 && (attributes & FileAttributes.Directory) == 0)
+                    return Results.BadRequest(new { error = "The selected script folder is invalid." });
+            }
         }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        catch (FileNotFoundException)
         {
-            return Results.BadRequest(new { error = "The supplied script path is invalid." });
+            return Results.NotFound(new { error = "The selected script no longer exists." });
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Results.NotFound(new { error = "The selected script folder no longer exists." });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Results.Forbid();
         }
 
         if (!File.Exists(fullPath))
-            return Results.NotFound(new { error = "The script file was not found on the Headless Skua computer." });
+            return Results.NotFound(new { error = "The selected script was not found in the VibeSkua Scripts folder." });
 
         try
         {
