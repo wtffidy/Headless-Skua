@@ -111,10 +111,22 @@ jobs:
             if ([string]::IsNullOrWhiteSpace($status.connectionMessage)) {
               throw "The panel status response is missing its connection explanation."
             }
+            if ($null -eq $status.PSObject.Properties["butlerAvailable"]) {
+              throw "The panel status response is missing Butler availability."
+            }
+
+            $scriptsResponse = $client.GetAsync("http://127.0.0.1:8788/api/scripts").GetAwaiter().GetResult()
+            if (-not $scriptsResponse.IsSuccessStatusCode) {
+              throw "The installed-script API did not return HTTP 200."
+            }
+            $scripts = $scriptsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+            if ($null -eq $scripts.scripts) {
+              throw "The installed-script API response is missing its scripts list."
+            }
 
             $page = $client.GetStringAsync("http://127.0.0.1:8788/").GetAwaiter().GetResult()
-            if ($page -notmatch "Panel API online" -or $page -notmatch "connectionHint") {
-              throw "The published panel page is missing its connection-state UI."
+            if ($page -notmatch "Panel API online" -or $page -notmatch "connectionHint" -or $page -notmatch "scriptPicker") {
+              throw "The published panel page is missing its connection-state or script-picker UI."
             }
 
             $scriptBody = [System.Net.Http.StringContent]::new('{"path":"C:/HeadlessSmoke/missing.cs"}', [System.Text.Encoding]::UTF8, "application/json")
