@@ -217,23 +217,33 @@ internal static class HeadlessLoginFlow
     {
         DateTime deadline = DateTime.UtcNow.Add(timeout);
         DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+        DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
             if (DateTime.UtcNow >= nextDiagnostic)
             {
+                HeadlessConsole.Debug("AQW initialization probe: checking objLogin...");
                 bool loginDataLoaded = !bot.Flash.IsNull("objLogin");
+                HeadlessConsole.Debug($"AQW initialization probe: objLogin={loginDataLoaded}; checking objServerInfo...");
                 bool serverDataLoaded = !bot.Flash.IsNull("objServerInfo");
+                HeadlessConsole.Debug($"AQW initialization probe: objServerInfo={serverDataLoaded}; checking world...");
                 bool worldLoaded = bot.Flash.IsWorldLoaded;
+                HeadlessConsole.Debug($"AQW initialization probe: world={worldLoaded}; checking avatar...");
                 bool avatarLoaded = worldLoaded && !bot.Flash.IsNull("world.myAvatar");
                 HeadlessConsole.Debug($"AQW initialization: objLogin={loginDataLoaded}, objServerInfo={serverDataLoaded}, world={worldLoaded}, avatar={avatarLoaded}.");
                 nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
             }
 
-            // Player.Playing reads world.myAvatar state. Do not query it until the
-            // world and avatar clips exist, otherwise early login can hit Error #1009.
-            if (bot.Flash.IsWorldLoaded
-                && !bot.Flash.IsNull("world.myAvatar")
-                && bot.Player.Playing)
+            // Keep the heartbeat independent of ActionScript queries so a stalled browser
+            // bridge cannot make the entire connection wait appear silent.
+            if (DateTime.UtcNow >= nextHeartbeat)
+            {
+                HeadlessConsole.Debug("AQW initialization is still waiting for the game world.");
+                nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
+            }
+
+            bool worldReady = bot.Flash.IsWorldLoaded;
+            if (worldReady && !bot.Flash.IsNull("world.myAvatar") && bot.Player.Playing)
                 return true;
 
             await Task.Delay(250, cancellationToken);
