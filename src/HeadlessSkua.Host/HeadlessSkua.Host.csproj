@@ -12,8 +12,14 @@
     <ProjectReference Include="../../vendor/VibeSkua/Skua.Core/Skua.Core.csproj" />
     <ProjectReference Include="../../vendor/VibeSkua/Skua.Plugin.ButlerV5/Skua.Plugin.ButlerV5.csproj" />
   </ItemGroup>
+
   <Target Name="CopyBundledPlugins" AfterTargets="Build">
     <MakeDir Directories="$(TargetDir)plugins" />
     <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(TargetDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyBundledPluginsToPublish" AfterTargets="Publish">
+    <MakeDir Directories="$(PublishDir)plugins" />
+    <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(PublishDir)plugins" SkipUnchangedFiles="true" />
   </Target>
 </Project>
