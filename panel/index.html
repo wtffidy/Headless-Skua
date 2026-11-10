@@ -180,7 +180,7 @@
       try {
         const status = await api("/api/status");
         byId("connectionDot").classList.add("online");
-        byId("connectionText").textContent = status.connected ? "AQW online" : status.loggedIn ? "AQW login accepted" : "Panel API online";
+        byId("connectionText").textContent = status.loggedIn ? "AQW online" : "Panel API online";
         byId("loginState").textContent = status.loggedIn ? "Online" : "Waiting";
         byId("loginState").className = status.loggedIn ? "good" : "wait";
         byId("worldState").textContent = status.worldState || (status.worldLoaded ? "Loaded" : "Waiting");
