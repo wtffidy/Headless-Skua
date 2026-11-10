@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Net;
 using System.Net.NetworkInformation;
 using Microsoft.AspNetCore.Builder;
@@ -27,11 +28,13 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private readonly int _port;
     private readonly string _panelDirectory;
     private readonly object _butlerSync = new();
+    private readonly object _scriptStopSync = new();
     private readonly object _statusSync = new();
     private static int _traceListenerAttached;
     private WebApplication? _application;
     private CancellationTokenSource? _butlerCancellation;
     private Task? _butlerTask;
+    private Task? _scriptStopTask;
     private CancellationTokenSource? _statusMonitorCancellation;
     private Task? _statusMonitorTask;
     private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, false, null, null, null, null, null);
@@ -203,6 +206,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             level = snapshot.Level,
             gold = snapshot.Gold,
             scriptRunning = _scriptManager.ScriptRunning,
+            scriptStopping = IsScriptStopping(),
             butlerRunning = _butlerTask is { IsCompleted: false },
             butlerAvailable = butlerBlockReason is null,
             butlerBlockReason
@@ -492,14 +496,70 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         Trace.AutoFlush = true;
     }
 
+    /// <summary>
+    /// Reports whether VibeSkua is currently executing its script stop sequence.
+    /// </summary>
+    private bool IsScriptStopping()
+    {
+        lock (_scriptStopSync)
+            return _scriptStopTask is { IsCompleted: false };
+    }
+
+    /// <summary>
+    /// Requests VibeSkua's complete script shutdown sequence without blocking the HTTP request.
+    /// </summary>
     private IResult StopScript()
     {
         if (!_scriptManager.ScriptRunning)
             return Results.Conflict(new { error = "No script is currently running." });
 
-        _scriptManager.ScriptCts?.Cancel();
-        HeadlessConsole.Warn("Script stop requested from the remote panel.");
-        return Results.Ok(new { message = "Script stop requested." });
+        lock (_scriptStopSync)
+        {
+            if (_scriptStopTask is { IsCompleted: false })
+                return Results.Accepted(value: new { message = "The script is already stopping.", stopping = true });
+
+            _scriptStopTask = Task.Run(StopScriptCoreAsync);
+        }
+
+        HeadlessConsole.Warn("Full script stop requested from the remote panel.");
+        return Results.Accepted(value: new { message = "Stop requested. Waiting for the script to shut down...", stopping = true });
+    }
+
+    /// <summary>
+    /// Invokes VibeSkua's own stop routine, which cancels the script and interrupts its thread if it does not exit.
+    /// </summary>
+    private async Task StopScriptCoreAsync()
+    {
+        try
+        {
+            MethodInfo? stopMethod = _scriptManager.GetType().GetMethod(
+                "StopScript",
+                BindingFlags.Instance | BindingFlags.Public,
+                binder: null,
+                types: new[] { typeof(bool) },
+                modifiers: null);
+
+            object? stopResult = stopMethod?.Invoke(_scriptManager, new object[] { true });
+            if (stopResult is ValueTask stopValueTask)
+                await stopValueTask.ConfigureAwait(false);
+            else if (stopResult is Task stopTask)
+                await stopTask.ConfigureAwait(false);
+            else
+            {
+                HeadlessConsole.Warn("VibeSkua stop routine is unavailable. Falling back to script cancellation.");
+                _scriptManager.ScriptCts?.Cancel();
+            }
+
+            HeadlessConsole.Success("VibeSkua script stop sequence finished.");
+        }
+        catch (Exception exception)
+        {
+            Exception actualException = exception is TargetInvocationException { InnerException: not null } invocationException
+                ? invocationException.InnerException
+                : exception;
+            HeadlessConsole.Error($"VibeSkua script stop failed: {actualException.Message}");
+            _scriptManager.ScriptCts?.Cancel();
+        }
     }
 
     private IResult StartButler(ButlerStartRequest request)
