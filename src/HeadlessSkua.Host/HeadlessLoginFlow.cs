@@ -225,7 +225,7 @@ internal static class HeadlessLoginFlow
             // response through ExternalInterface. Wait for the host callback to finish first.
             if (!loginResponseReceived)
             {
-                (bool loginAccepted, _) = sessionState.GetSnapshot();
+                bool loginAccepted = sessionState.GetSnapshot().LoginAccepted;
                 if (!loginAccepted)
                 {
                     if (DateTime.UtcNow >= nextHeartbeat)
