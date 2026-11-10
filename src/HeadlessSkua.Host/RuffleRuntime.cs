@@ -264,12 +264,19 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     private static async Task RelayWebSocketToTcpAsync(WebSocket webSocket, NetworkStream networkStream, CancellationToken cancellationToken)
     {
         byte[] buffer = new byte[16 * 1024];
+        bool firstPayload = true;
 
         while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open)
         {
             WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
             if (result.MessageType == WebSocketMessageType.Close)
                 return;
+
+            if (firstPayload && result.Count > 0)
+            {
+                HeadlessConsole.Debug($"AQW tunnel sent its first client payload ({result.Count} bytes).");
+                firstPayload = false;
+            }
 
             await networkStream.WriteAsync(buffer.AsMemory(0, result.Count), cancellationToken);
         }
@@ -281,12 +288,19 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     private static async Task RelayTcpToWebSocketAsync(NetworkStream networkStream, WebSocket webSocket, CancellationToken cancellationToken)
     {
         byte[] buffer = new byte[16 * 1024];
+        bool firstPayload = true;
 
         while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open)
         {
             int bytesRead = await networkStream.ReadAsync(buffer.AsMemory(), cancellationToken);
             if (bytesRead == 0)
                 return;
+
+            if (firstPayload)
+            {
+                HeadlessConsole.Debug($"AQW tunnel received its first server payload ({bytesRead} bytes).");
+                firstPayload = false;
+            }
 
             await webSocket.SendAsync(
                 new ArraySegment<byte>(buffer, 0, bytesRead),
@@ -522,8 +536,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
                 || message.Text.Contains("exception", StringComparison.OrdinalIgnoreCase);
 
             if (HeadlessConsole.Quiet
-                || message.Type is "log" or "debug"
-                || (message.Type == "info" && !actionableInfo)
+                || ((message.Type is "log" or "debug" or "info") && !actionableInfo)
                 || message.Text.Contains("GPU stall due to ReadPixels", StringComparison.OrdinalIgnoreCase)
                 || message.Text.Contains("Failed to load resource: the server responded with a status of 404", StringComparison.OrdinalIgnoreCase))
                 return;
