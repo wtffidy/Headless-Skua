@@ -81,7 +81,8 @@ internal static class HeadlessLoginFlow
         bool selectedInClient = false;
         try
         {
-            selectedInClient = bot.Servers.Connect(selectedServer);
+            int port = selectedServer.Port > 0 ? selectedServer.Port : 5588;
+            selectedInClient = bot.Servers.ConnectIP(selectedServer.IP, port);
         }
         catch (Exception exception)
         {
@@ -116,7 +117,15 @@ internal static class HeadlessLoginFlow
         DateTime deadline = DateTime.UtcNow.AddSeconds(90);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
-            string? modalMessage = bot.Flash.Call<string>("getActiveModalMessage");
+            string? modalMessage = null;
+            try
+            {
+                modalMessage = bot.Flash.Call<string>("getActiveModalMessage");
+            }
+            catch (Exception exception)
+            {
+                HeadlessConsole.Debug($"Login dialog status is unavailable: {exception.Message}");
+            }
             if (!string.IsNullOrWhiteSpace(modalMessage) && !string.Equals(modalMessage, "null", StringComparison.OrdinalIgnoreCase))
             {
                 HeadlessConsole.Error($"Login rejected: {modalMessage.Trim()}");
