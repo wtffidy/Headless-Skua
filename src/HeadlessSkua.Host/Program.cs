@@ -117,8 +117,9 @@ internal static class Program
                     {
                         try
                         {
-                            flash.Call("loadClient");
-                            HeadlessConsole.Success("AQW game-load request dispatched to the SWF.");
+                            HeadlessConsole.Debug("Queuing the SWF loadClient callback...");
+                            flash.Dispatch("loadClient");
+                            HeadlessConsole.Success("AQW game-load callback queued in Ruffle.");
                         }
                         catch (Exception exception)
                         {
