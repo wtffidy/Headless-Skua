@@ -35,7 +35,15 @@ if errorlevel 1 (
     goto :failed
 )
 
-echo [1/7] Initializing VibeSkua source...
+echo [1/8] Pulling the latest Headless Skua changes...
+git pull --ff-only
+if errorlevel 1 (
+    echo [ERROR] Could not update the repository. Check for local changes or a diverged branch.
+    goto :failed
+)
+
+echo.
+echo [2/8] Initializing and updating VibeSkua source...
 git submodule update --init --recursive
 if errorlevel 1 goto :failed
 
@@ -45,12 +53,12 @@ if not exist "vendor\VibeSkua\Skua.Core\Skua.Core.csproj" (
 )
 
 echo.
-echo [2/7] Restoring solution...
+echo [3/8] Restoring solution...
 dotnet restore HeadlessSkua.sln
 if errorlevel 1 goto :failed
 
 echo.
-echo [3/7] Building solution...
+echo [4/8] Building solution...
 dotnet build HeadlessSkua.sln --configuration %CONFIGURATION% --no-restore
 if errorlevel 1 goto :failed
 
@@ -68,17 +76,17 @@ if not errorlevel 1 (
 )
 
 echo.
-echo [4/7] Installing headless Chromium...
+echo [5/8] Installing headless Chromium...
 %POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "%PLAYWRIGHT_SCRIPT%" install chromium
 if errorlevel 1 goto :failed
 
 echo.
-echo [5/7] Installing Ruffle and the Skua game client...
+echo [6/8] Installing Ruffle and the Skua game client...
 %POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "runtime\ruffle-host\Install-Runtime.ps1"
 if errorlevel 1 goto :failed
 
 echo.
-echo [6/7] Publishing standalone Windows build...
+echo [7/8] Publishing standalone Windows build...
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
 dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=embedded -o "%OUTPUT_DIR%"
 if errorlevel 1 goto :failed
@@ -94,7 +102,7 @@ if not exist "%OUTPUT_DIR%\HeadlessSkua.exe" (
 )
 
 echo.
-echo [7/7] Checking published installation...
+echo [8/8] Checking published installation...
 "%OUTPUT_DIR%\HeadlessSkua.exe" doctor
 if errorlevel 1 goto :failed
 
