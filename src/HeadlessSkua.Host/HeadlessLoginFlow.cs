@@ -229,12 +229,11 @@ internal static class HeadlessLoginFlow
         Stopwatch connectionTimer = Stopwatch.StartNew();
         DateTime deadline = DateTime.UtcNow.Add(timeout);
         DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
-        DateTime nextPlayingCheck = DateTime.MaxValue;
         DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
+        DateTime nextAvatarCheck = DateTime.MinValue;
         bool loginResponseReceived = false;
         bool worldReady = false;
         bool avatarReady = false;
-        bool playing = false;
 
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
@@ -267,9 +266,10 @@ internal static class HeadlessLoginFlow
                     HeadlessConsole.Debug($"AQW world initialized after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
             }
 
-            if (worldReady && !avatarReady)
+            if (worldReady && !avatarReady && now >= nextAvatarCheck)
             {
                 avatarReady = IsAvatarPresent(bot);
+                nextAvatarCheck = now.AddSeconds(1);
                 if (avatarReady)
                 {
                     HeadlessConsole.Success($"AQW local character detected in the world after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
@@ -277,15 +277,9 @@ internal static class HeadlessLoginFlow
                 }
             }
 
-            if (avatarReady && now >= nextPlayingCheck)
-            {
-                playing = bot.Player.Playing;
-                nextPlayingCheck = now.AddMilliseconds(500);
-            }
-
             if (now >= nextDiagnostic)
             {
-                HeadlessConsole.Debug($"AQW initialization: world={worldReady}, avatar={avatarReady}, playing={playing} ({connectionTimer.Elapsed.TotalSeconds:F1}s).");
+                HeadlessConsole.Debug($"AQW initialization: world={worldReady}, avatar={avatarReady} ({connectionTimer.Elapsed.TotalSeconds:F1}s).");
                 nextDiagnostic = now.AddSeconds(5);
             }
 
@@ -316,16 +310,8 @@ internal static class HeadlessLoginFlow
         if (!bot.Flash.IsNull("world.myAvatar"))
             return true;
 
-        int avatarCount = bot.Flash.GetGameObject<int>("world.avatars.length", 0);
-        if (avatarCount <= 0)
-            return false;
-
-        int scanCount = Math.Min(avatarCount, 256);
-        for (int index = 0; index < scanCount; index++)
-            if (bot.Flash.GetGameObject<bool>($"world.avatars.{index}.isMyAvatar", false))
-                return true;
-
-        return false;
+        List<bool> localAvatarFlags = bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
+        return localAvatarFlags.Contains(true);
     }
 
     /// <summary>
@@ -346,9 +332,18 @@ internal static class HeadlessLoginFlow
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
             bool worldReady = bot.Flash.IsWorldLoaded;
-            bool avatarReady = worldReady && IsAvatarPresent(bot);
-            bool playing = avatarReady && bot.Player.Playing;
-            bool playerReady = avatarReady && playing && bot.Player.Loaded;
+            bool myAvatarAssigned = worldReady && !bot.Flash.IsNull("world.myAvatar");
+            bool avatarReady = worldReady && (myAvatarAssigned || IsAvatarPresent(bot));
+            bool playing = myAvatarAssigned && bot.Player.Playing;
+            int inventoryItems = myAvatarAssigned
+                ? bot.Flash.GetGameObject<int>("world.myAvatar.items.length", 0)
+                : 0;
+            bool mapLoading = !myAvatarAssigned
+                || bot.Flash.GetGameObject<bool>("world.mapLoadInProgress", true);
+            bool avatarModelReady = myAvatarAssigned && !bot.Flash.IsNull("world.myAvatar.pMC");
+            bool artLoaded = avatarModelReady
+                && bot.Flash.CallGameFunction<bool>("world.myAvatar.pMC.artLoaded");
+            bool playerReady = playing && inventoryItems > 0 && !mapLoading && artLoaded;
 
             if (playerReady)
             {
@@ -358,11 +353,14 @@ internal static class HeadlessLoginFlow
 
             if (DateTime.UtcNow >= nextDiagnostic)
             {
-                HeadlessConsole.Debug($"Automation readiness: world={worldReady}, avatar={avatarReady}, playing={playing}, playerLoaded={playerReady} ({initializationTimer.Elapsed.TotalSeconds:F1}s).");
+                HeadlessConsole.Debug(
+                    $"Automation readiness: world={worldReady}, avatar={avatarReady}, myAvatar={myAvatarAssigned}, playing={playing}, " +
+                    $"inventoryItems={inventoryItems}, mapLoading={mapLoading}, avatarModel={avatarModelReady}, artLoaded={artLoaded} " +
+                    $"({initializationTimer.Elapsed.TotalSeconds:F1}s).");
                 nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
             }
 
-            await Task.Delay(500, cancellationToken);
+            await Task.Delay(1000, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
