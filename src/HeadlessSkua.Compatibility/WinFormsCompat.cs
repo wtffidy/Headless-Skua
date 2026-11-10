@@ -2,6 +2,30 @@
 // These controls intentionally do not create windows. They preserve script compilation and
 // allow progress/status helpers to run without introducing a desktop UI dependency.
 
+namespace System.Drawing
+{
+    public class Font : IDisposable
+    {
+        public Font(string familyName, float emSize) { }
+        public void Dispose() { }
+    }
+
+    public static class Brushes
+    {
+        public static object White { get; } = new();
+    }
+
+    public class PaintEventArgs : EventArgs
+    {
+        public Graphics Graphics { get; } = new();
+    }
+
+    public class Graphics
+    {
+        public void DrawString(string text, Font font, object brush, PointF point) { }
+    }
+}
+
 namespace System.Windows.Forms;
 
 public delegate void MethodInvoker();
@@ -13,7 +37,7 @@ public enum FormBorderStyle { None, FixedSingle, Fixed3D, FixedDialog, Sizable, 
 public enum ProgressBarStyle { Blocks, Continuous, Marquee }
 public enum DialogResult { None, OK, Cancel, Abort, Retry, Ignore, Yes, No }
 
-public class ControlCollection : List<Control>;
+public class ControlCollection : List<Control> { }
 
 public class Control : IDisposable
 {
