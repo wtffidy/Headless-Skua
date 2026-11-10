@@ -14,7 +14,7 @@ On Windows, run:
 Build.bat
 ```
 
-The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. Playwright's Node driver, the dashboard files, Ruffle, and the AQW client remain alongside the executable as runtime assets:
+The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. Playwright's Node driver, the dashboard files, Ruffle, and the AQW client remain alongside the executable as runtime assets. After a successful build, Headless Skua opens in its **own console window**, leaving the build terminal available:
 
 ```
 Build\
@@ -42,6 +42,19 @@ The script launches the published executable after a successful build. You can a
 
 ```bat
 Build\HeadlessSkua.exe run
+```
+
+Hide low-level Ruffle, Chromium, and ActionScript trace output while keeping Headless Skua prompts, status, and errors visible:
+
+```bat
+Build\HeadlessSkua.exe run --quiet
+Build.bat --quiet
+```
+
+You can also pass regular runtime options through the build script:
+
+```bat
+Build.bat run --remote --quiet
 ```
 
 Run an existing Skua C# script:
@@ -73,6 +86,12 @@ Build\HeadlessSkua.exe run --no-color
 ```
 
 If VibeSkua Manager accounts are available, choose one from the numbered list. Otherwise, choose manual login and enter a username and password. After authentication, select an online game server. Scripts and ButlerV5 start after the game world connects.
+
+## AQW socket networking
+
+Chromium cannot open raw TCP sockets. Headless Skua now starts a loopback-only WebSocket-to-TCP relay and configures Ruffle's `socketProxy` from Artix's live server list (`https://game.aq.com/game/api/data/servers`). Each server hostname/port is tunneled to the matching AQW TCP endpoint, including port 843 for Flash policy requests. A small fallback endpoint list is used if the server-list API is unavailable.
+
+The relay only accepts server endpoints from the live AQW list or its bundled AQW fallback list. It is bound to loopback and is not exposed through the optional remote control panel. No separate Python/Websockify installation is required.
 
 ## Remote panel
 
