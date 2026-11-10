@@ -216,7 +216,7 @@ internal static class HeadlessLoginFlow
     private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, TimeSpan timeout, CancellationToken cancellationToken)
     {
         DateTime deadline = DateTime.UtcNow.Add(timeout);
-        DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+        DateTime nextDiagnostic = DateTime.UtcNow;
         DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
