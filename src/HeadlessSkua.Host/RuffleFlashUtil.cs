@@ -52,6 +52,23 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         return result is T typed ? typed : default;
     }
 
+    /// <summary>
+    /// Queues a void ActionScript callback without waiting for its asynchronous work.
+    /// </summary>
+    /// <param name="function">The registered ActionScript callback name.</param>
+    public void Dispatch(string function)
+    {
+        try
+        {
+            _runtime.DispatchActionScriptAsync(function).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"[Ruffle Dispatch] {function}: {exception.GetType().Name}: {exception.Message}");
+            throw;
+        }
+    }
+
     /// <inheritdoc />
     public object? Call(string function, Type type, params object[] args)
     {
