@@ -1,7 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
 namespace HeadlessSkua;
 
 internal static class Program
@@ -13,7 +9,7 @@ internal static class Program
     /// </summary>
     /// <param name="args">Command-line arguments supplied by the process.</param>
     /// <returns>A process exit code indicating success or failure.</returns>
-    private static async Task<int> Main(string[] args)
+    private static int Main(string[] args)
     {
         if (args.Length == 0 || args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
