@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Dynamic;
 using System.Globalization;
 using System.Text.Json;
@@ -18,6 +19,8 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     };
 
     private readonly RuffleRuntime _runtime;
+    private readonly ConcurrentDictionary<string, DeferredModuleCall> _deferredModuleCalls = new(StringComparer.OrdinalIgnoreCase);
+    private int _flushingDeferredModuleCalls;
 
     /// <inheritdoc />
     public event FlashCallHandler? FlashCall;
@@ -74,17 +77,110 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     {
         try
         {
-            if (ShouldSkipNullTarget(function, args))
+            if (ShouldDeferModuleCall(function, args) || ShouldSkipUnavailableGameCall(function) || ShouldSkipNullTarget(function, args))
                 return type.IsValueType ? Activator.CreateInstance(type) : null;
 
             JsonElement? result = _runtime.CallActionScriptAsync(function, args).GetAwaiter().GetResult();
-            return ConvertResult(result, type);
+            object? converted = ConvertResult(result, type);
+            FlushDeferredModuleCalls();
+            return converted;
         }
         catch (Exception exception)
         {
             Console.Error.WriteLine($"[Ruffle Call] {function}: {exception.GetType().Name}: {exception.Message}");
             return type.IsValueType ? Activator.CreateInstance(type) : null;
         }
+    }
+
+    /// <summary>
+    /// Defers module toggles until both the game world and its modal UI are available.
+    /// Module frame callbacks will then apply the already-recorded enabled state.
+    /// </summary>
+    /// <param name="function">The ActionScript module callback.</param>
+    /// <param name="args">Arguments supplied to the callback.</param>
+    /// <returns>True when the module call has been queued.</returns>
+    private bool ShouldDeferModuleCall(string function, object[] args)
+    {
+        if (function is not ("modEnable" or "modDisable") || args.Length == 0 || args[0] is not string moduleName)
+            return false;
+
+        if (IsModulesReady())
+            return false;
+
+        _deferredModuleCalls[moduleName] = new DeferredModuleCall(function, moduleName);
+        return true;
+    }
+
+    /// <summary>
+    /// Applies module toggles that arrived before Skua finished creating the game world and UI.
+    /// </summary>
+    private void FlushDeferredModuleCalls()
+    {
+        if (_deferredModuleCalls.IsEmpty || !IsModulesReady() || Interlocked.Exchange(ref _flushingDeferredModuleCalls, 1) != 0)
+            return;
+
+        try
+        {
+            foreach (KeyValuePair<string, DeferredModuleCall> entry in _deferredModuleCalls.ToArray())
+            {
+                if (!_deferredModuleCalls.TryRemove(entry.Key, out DeferredModuleCall deferredCall))
+                    continue;
+
+                try
+                {
+                    _runtime.CallActionScriptAsync(deferredCall.Function, new object[] { deferredCall.ModuleName }).GetAwaiter().GetResult();
+                }
+                catch
+                {
+                    _deferredModuleCalls.TryAdd(entry.Key, deferredCall);
+                }
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _flushingDeferredModuleCalls, 0);
+        }
+    }
+
+    /// <summary>
+    /// Checks that Skua has created the world avatar collection and modal UI before enabling UI modules.
+    /// </summary>
+    /// <returns>True when module callbacks can safely access their game objects.</returns>
+    private bool IsModulesReady()
+    {
+        return !IsNullPath("world.avatars") && !IsNullPath("ui.ModalStack");
+    }
+
+    /// <summary>
+    /// Skips gameplay-only callbacks until their underlying AQW objects have been constructed.
+    /// </summary>
+    /// <param name="function">The ActionScript callback name.</param>
+    /// <returns>True when the required game object is not available.</returns>
+    private bool ShouldSkipUnavailableGameCall(string function)
+    {
+        string? requiredPath = function switch
+        {
+            "skipCutscenes" => "mcExtSWF",
+            "killLag" => "world",
+            "magnetize" => "world.myAvatar",
+            "infiniteRange" => "world.actions.active",
+            "hidePlayers" or "disableFX" => "world.avatars",
+            "jumpCorrectRoom" => "world",
+            _ => null
+        };
+
+        return !string.IsNullOrWhiteSpace(requiredPath) && IsNullPath(requiredPath);
+    }
+
+    /// <summary>
+    /// Tests an ActionScript object path without throwing when the game has not created it yet.
+    /// </summary>
+    /// <param name="path">The object path to check.</param>
+    /// <returns>True when the path resolves to null or is unavailable.</returns>
+    private bool IsNullPath(string path)
+    {
+        JsonElement? result = _runtime.CallActionScriptAsync("isNull", new object[] { path }).GetAwaiter().GetResult();
+        return ConvertResult(result, typeof(bool)) is true;
     }
 
     /// <summary>
@@ -105,12 +201,10 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             _ => null
         };
 
-        if (string.IsNullOrWhiteSpace(targetPath))
-            return false;
-
-        JsonElement? result = _runtime.CallActionScriptAsync("isNull", new object[] { targetPath }).GetAwaiter().GetResult();
-        return ConvertResult(result, typeof(bool)) is true;
+        return !string.IsNullOrWhiteSpace(targetPath) && IsNullPath(targetPath);
     }
+
+    private readonly record struct DeferredModuleCall(string Function, string ModuleName);
 
     /// <inheritdoc />
     public object FromFlashXml(XElement element)
