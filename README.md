@@ -14,7 +14,7 @@ On Windows, run:
 Build.bat
 ```
 
-The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. Playwright's Node driver, the dashboard files, Ruffle, and the AQW client remain alongside the executable as runtime assets. After a successful build, Headless Skua opens in its **own console window**, leaving the build terminal available:
+The build script restores and builds the solution, installs Chromium and the latest upstream Ruffle nightly, then publishes the .NET host as one self-contained Windows x64 executable. The selected Ruffle release tag is logged at startup and saved in `runtime\ruffle-host\ruffle-version.txt`. Nightlies are experimental, but they're worth testing here because the current stable package predates several recent renderer and loading fixes. Playwright's Node driver, the dashboard files, Ruffle, and the AQW client remain alongside the executable as runtime assets. After a successful build, Headless Skua opens in its **own console window**, leaving the build terminal available:
 
 ```
 Build\
@@ -33,6 +33,7 @@ Build\
     └── ruffle-host\
         ├── index.html
         ├── bridge.js
+        ├── ruffle-version.txt
         ├── ruffle\
         └── game\
             └── skua.swf
@@ -55,6 +56,12 @@ You can also pass regular runtime options through the build script:
 
 ```bat
 Build.bat run --remote --quiet
+```
+
+To pin a specific Ruffle package for a build, set `HEADLESS_SKUA_RUFFLE_VERSION`. The default is the latest published nightly; use `0.7.1` to test the current stable release instead:
+
+```bat
+set HEADLESS_SKUA_RUFFLE_VERSION=0.7.1 && Build.bat
 ```
 
 Run an existing Skua C# script:
