@@ -73,6 +73,14 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             throw new FileNotFoundException("Ruffle host index.html was not found.", indexPath);
         if (!File.Exists(rufflePath))
             throw new FileNotFoundException("Ruffle is not installed. Run Install-Runtime.ps1 first.", rufflePath);
+
+        string ruffleVersionPath = Path.Combine(_runtimeDirectory, "ruffle-version.txt");
+        if (File.Exists(ruffleVersionPath))
+        {
+            string ruffleVersion = (await File.ReadAllTextAsync(ruffleVersionPath, cancellationToken)).Trim();
+            if (!string.IsNullOrWhiteSpace(ruffleVersion))
+                HeadlessConsole.Info($"Using Ruffle web package {ruffleVersion}.");
+        }
         if (!File.Exists(fullSwfPath))
             throw new FileNotFoundException("The Skua SWF was not found. Supply --swf or install it into runtime/game/skua.swf.", fullSwfPath);
 
