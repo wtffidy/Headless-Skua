@@ -13,14 +13,14 @@ The Skua core communicates with the SWF through `IFlashUtil`, which is a useful 
 
 Prototype Ruffle Web hosted inside Playwright-controlled Chromium in headless mode.
 
-The .NET host remains responsible for Skua services, scripts, session lifecycle, and a bridge that adapts the browser player to the existing `IFlashUtil` contract.
+The .NET host remains responsible for Skua services, scripts, session lifecycle, and a bridge that adapts the browser player to the existing `IFlashUtil` contract. The proposed bridge direction is: .NET invokes ActionScript through Ruffle's versioned `callExternalInterface` API; ActionScript-to-host calls use JavaScript functions exposed to the page and forwarded to .NET by Playwright.
 
 This is a candidate architecture, not a commitment to ship it regardless of results.
 
 ## Why this candidate
 
 - Ruffle executes SWF content without relying on the retired browser Flash plugin or Windows ActiveX control.
-- Ruffle Web is distributed as a WebAssembly player with a JavaScript API.
+- Ruffle Web is distributed as a WebAssembly player with a JavaScript API. Its current versioned player API exposes `player.ruffle().callExternalInterface(name, ...args)` for invoking callbacks registered by ActionScript. ActionScript `ExternalInterface.call(...)` can call JavaScript functions exposed by the host page when script access is enabled.
 - Playwright for .NET can launch Chromium in headless mode and control the page from the .NET process.
 - The approach keeps the Flash runtime isolated from the Skua script engine and allows the bridge to be tested independently.
 
