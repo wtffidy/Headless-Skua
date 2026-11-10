@@ -154,17 +154,4 @@ internal static class HeadlessLoginFlow
         return (username?.Trim() ?? string.Empty, passwordInput);
     }
 
-    private static async Task<bool> WaitForWorldAsync(IScriptInterface bot, CancellationToken cancellationToken)
-    {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(90);
-        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
-        {
-            if (bot.Player.Playing && bot.Flash.IsWorldLoaded)
-                return true;
-
-            await Task.Delay(250, cancellationToken);
-        }
-
-        return false;
-    }
 }
