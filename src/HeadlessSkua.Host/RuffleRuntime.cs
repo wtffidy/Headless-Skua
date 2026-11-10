@@ -513,17 +513,13 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         _page.Console += (_, message) =>
         {
-            if (HeadlessConsole.Quiet)
+            if (HeadlessConsole.Quiet || message.Type is "log" or "info" or "debug")
                 return;
 
-            TerminalLogLevel level = message.Type switch
-            {
-                "error" => TerminalLogLevel.Error,
-                "warning" => TerminalLogLevel.Warn,
-                "debug" => TerminalLogLevel.Debug,
-                _ => TerminalLogLevel.Info
-            };
-            HeadlessConsole.Log(level, $"[Browser] {message.Text}");
+            TerminalLogLevel level = message.Type == "error" ? TerminalLogLevel.Error : TerminalLogLevel.Warn;
+            string cleanMessage = System.Text.RegularExpressions.Regex.Replace(message.Text, @"%c[^%]*%c", string.Empty);
+            cleanMessage = System.Text.RegularExpressions.Regex.Replace(cleanMessage, @"\s*(color|background|font-style):\s*[^;]+;?", string.Empty);
+            HeadlessConsole.Log(level, $"[Browser] {cleanMessage.Trim()}");
         };
         _page.PageError += (_, message) =>
         {
