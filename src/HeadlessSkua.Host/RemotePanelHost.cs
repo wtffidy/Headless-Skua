@@ -32,7 +32,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private Task? _butlerTask;
     private CancellationTokenSource? _statusMonitorCancellation;
     private Task? _statusMonitorTask;
-    private GameStatusSnapshot _statusSnapshot = new(false, false, false, null, null);
+    private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, null, null);
 
     /// <summary>
     /// Creates the dashboard host. It binds to loopback unless remote access is explicitly enabled.
@@ -150,23 +150,29 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         GameStatusSnapshot snapshot = GetStatusSnapshot();
         bool loggedIn = loginAccepted || snapshot.LoggedIn;
         bool worldLoaded = loggedIn && snapshot.WorldLoaded;
-        bool alive = worldLoaded && snapshot.Alive;
-        bool connected = loggedIn && worldLoaded && alive;
+        bool avatarLoaded = worldLoaded && snapshot.AvatarLoaded;
+        bool alive = avatarLoaded && snapshot.Alive;
+        bool connected = loggedIn && worldLoaded && avatarLoaded && alive;
         string? account = string.IsNullOrWhiteSpace(acceptedAccount) ? snapshot.Account : acceptedAccount;
+        string? server = string.IsNullOrWhiteSpace(_bot.Servers.LastName) ? snapshot.Server : _bot.Servers.LastName;
         string runtime = !loggedIn
             ? "Not logged in"
             : !worldLoaded
-                ? "Login accepted · loading world"
-                : !alive
-                    ? "World loaded · character not alive"
-                    : "Connected";
+                ? "Login accepted · connecting to game world"
+                : !avatarLoaded
+                    ? "World loaded · waiting for character"
+                    : !alive
+                        ? "Character loaded · not alive"
+                        : "Connected";
         string connectionMessage = !loggedIn
             ? "The panel API is online. Waiting for AQW to confirm the game login."
             : !worldLoaded
-                ? $"AQW accepted the login{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" for {account}")}. The game world is still loading; automation unlocks when the character is ready."
-                : !alive
-                    ? "The AQW world is loaded, but the character is not alive yet. Automation will unlock when the character is alive."
-                    : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
+                ? $"AQW accepted the login{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" for {account}")}{(string.IsNullOrWhiteSpace(server) ? string.Empty : $" and selected {server}")}. Waiting for the game world to initialize."
+                : !avatarLoaded
+                    ? $"The {server ?? "AQW"} world is loaded, but the character avatar has not initialized yet."
+                    : !alive
+                        ? "The AQW character is loaded, but not alive yet. Automation will unlock when the character is alive."
+                        : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
 
         string? butlerBlockReason = HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
 
@@ -178,11 +184,12 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             loginSource = loginAccepted ? "AQW login response" : "Skua player state",
             account,
             alive,
+            avatarLoaded,
             worldLoaded,
-            worldState = worldLoaded ? "Loaded" : loggedIn ? "Loading" : "Waiting",
+            worldState = worldLoaded ? "Loaded" : loggedIn && !string.IsNullOrWhiteSpace(server) ? "Connecting" : loggedIn ? "Loading" : "Waiting",
             runtime,
             connectionMessage,
-            server = snapshot.Server,
+            server,
             scriptRunning = _scriptManager.ScriptRunning,
             butlerRunning = _butlerTask is { IsCompleted: false },
             butlerAvailable = butlerBlockReason is null,
@@ -211,15 +218,16 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             {
                 (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
                 bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
+                string? server = _bot.Servers.LastName;
                 bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
-                bool alive = worldLoaded && _bot.Player.Alive;
+                bool avatarLoaded = worldLoaded && !_bot.Flash.IsNull("world.myAvatar");
+                bool alive = avatarLoaded && _bot.Player.Alive;
                 string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
                     ? acceptedAccount
                     : worldLoaded ? _bot.Player.Username : null;
-                string? server = _bot.Servers.LastName;
 
                 lock (_statusSync)
-                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, alive, account, server);
+                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, alive, account, server);
             }
             catch (Exception exception)
             {
@@ -331,7 +339,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     {
         (bool loginAccepted, _) = _sessionState.GetSnapshot();
         GameStatusSnapshot snapshot = GetStatusSnapshot();
-        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.Alive;
+        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.AvatarLoaded && snapshot.Alive;
     }
 
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
@@ -544,7 +552,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
     }
 
-    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool Alive, string? Account, string? Server);
+    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool AvatarLoaded, bool Alive, string? Account, string? Server);
     private sealed record ScriptStartRequest(string? Path);
     private sealed record ButlerStartRequest(string? Username, string? Duration);
 }
