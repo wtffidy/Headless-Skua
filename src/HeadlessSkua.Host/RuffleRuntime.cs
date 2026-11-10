@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -122,7 +123,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             Args = Array.Empty<string>()
         });
 
-        builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(0));
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
         _webApplication = builder.Build();
 
         FileExtensionContentTypeProvider contentTypes = new();
