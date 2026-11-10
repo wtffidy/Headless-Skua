@@ -22,25 +22,9 @@ internal static class Program
         HeadlessConsole.Banner(Version);
 
         // Double-clicking the executable starts the normal headless session.
-        // Keep the console visible on startup failure so the error can be read.
+        // Keep the console visible on any interactive startup failure so the final error can be read.
         if (args.Length == 0)
-        {
-            int exitCode = await RunAsync(new[] { "run" });
-            if (exitCode != 0 && !Console.IsInputRedirected)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"Headless Skua stopped with exit code {exitCode}. Press any key to close this window...");
-                try
-                {
-                    Console.ReadKey(intercept: true);
-                }
-                catch (InvalidOperationException)
-                {
-                }
-            }
-
-            return exitCode;
-        }
+            return await RunWithFailurePauseAsync(new[] { "run" });
 
         if (args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
@@ -83,15 +67,39 @@ internal static class Program
             for (int index = optionIndex; index < args.Length; index++)
                 butlerArguments.Add(args[index]);
 
-            return await RunAsync(butlerArguments.ToArray());
+            return await RunWithFailurePauseAsync(butlerArguments.ToArray());
         }
 
         if (args.Contains("run", StringComparer.OrdinalIgnoreCase))
-            return await RunAsync(args);
+            return await RunWithFailurePauseAsync(args);
 
         Console.Error.WriteLine($"Unknown command: {args[0]}");
         PrintHelp();
         return 1;
+    }
+
+    /// <summary>
+    /// Starts a runtime command and keeps interactive consoles open when startup fails.
+    /// </summary>
+    /// <param name="args">The runtime command arguments.</param>
+    /// <returns>The runtime process exit code.</returns>
+    private static async Task<int> RunWithFailurePauseAsync(string[] args)
+    {
+        int exitCode = await RunAsync(args);
+        if (exitCode == 0 || Console.IsInputRedirected || Console.IsOutputRedirected)
+            return exitCode;
+
+        Console.WriteLine();
+        Console.WriteLine($"Headless Skua stopped with exit code {exitCode}. Press any key to close this window...");
+        try
+        {
+            Console.ReadKey(intercept: true);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return exitCode;
     }
 
     /// <summary>
