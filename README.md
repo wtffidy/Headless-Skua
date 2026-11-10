@@ -66,6 +66,40 @@ Build\HeadlessSkua.exe run --no-color
 
 If VibeSkua Manager accounts are available, choose one from the numbered list. Otherwise, choose manual login and enter a username and password. After authentication, select an online game server. Scripts and ButlerV5 start after the game world connects.
 
+## Remote panel
+
+Headless Skua serves a browser control panel on port **8788**. It is enabled by default and listens on localhost only:
+
+```bat
+Build\\HeadlessSkua.exe run
+```
+
+Open [http://127.0.0.1:8788](http://127.0.0.1:8788) on the host computer.
+
+To make the panel available to other devices on your home network or VPN, bind it to all interfaces:
+
+```bat
+Build\\HeadlessSkua.exe run --remote
+```
+
+Or pass the option through the build script:
+
+```bat
+Build.bat run --remote
+```
+
+The panel prints the host's available IPv4 addresses at startup. Open `http://HOST-IP:8788` from another device. This includes the machine's LAN address and VPN address when the VPN adapter is active. Change the port with `--panel-port 8790`, or disable the panel with `--no-panel`.
+
+The first panel version exposes:
+- Runtime connection and selected server status.
+- Start and stop for existing Skua C# scripts.
+- Start and stop for ButlerV5, including an optional duration.
+- Recent Script, Debug, and Flash log output.
+
+**Important:** `--remote` binds to `0.0.0.0` and the panel/API has no login protection in this initial version. Use it only on a trusted LAN or private VPN, keep the port closed to the public internet, and do not configure router port forwarding. Anyone who can reach the panel can issue its available controls. The game login and server selection remain in the host terminal for now. Script paths entered in the panel refer to files on the Headless Skua computer, not the phone or browser device.
+
+Use `--no-panel` to turn off the web server entirely.
+
 ## Plugins
 
 Headless Skua initializes Skua's plugin manager and discovers plugins from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) and the local `plugins` folder. Plugins that require desktop UI cannot display those windows in headless mode; compatibility depends on their dependencies.
