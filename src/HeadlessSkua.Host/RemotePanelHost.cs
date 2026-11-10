@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using Microsoft.AspNetCore.Builder;
@@ -27,12 +28,13 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private readonly string _panelDirectory;
     private readonly object _butlerSync = new();
     private readonly object _statusSync = new();
+    private static int _traceListenerAttached;
     private WebApplication? _application;
     private CancellationTokenSource? _butlerCancellation;
     private Task? _butlerTask;
     private CancellationTokenSource? _statusMonitorCancellation;
     private Task? _statusMonitorTask;
-    private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, null, null);
+    private GameStatusSnapshot _statusSnapshot = new(false, false, false, false, false, null, null);
 
     /// <summary>
     /// Creates the dashboard host. It binds to loopback unless remote access is explicitly enabled.
@@ -151,8 +153,9 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         bool loggedIn = loginAccepted || snapshot.LoggedIn;
         bool worldLoaded = loggedIn && snapshot.WorldLoaded;
         bool avatarLoaded = worldLoaded && snapshot.AvatarLoaded;
+        bool playerLoaded = avatarLoaded && snapshot.PlayerLoaded;
         bool alive = avatarLoaded && snapshot.Alive;
-        bool connected = loggedIn && worldLoaded && avatarLoaded && alive;
+        bool connected = loggedIn && worldLoaded && avatarLoaded && playerLoaded && alive;
         string? account = string.IsNullOrWhiteSpace(acceptedAccount) ? snapshot.Account : acceptedAccount;
         string? server = string.IsNullOrWhiteSpace(_bot.Servers.LastName) ? snapshot.Server : _bot.Servers.LastName;
         string runtime = !loggedIn
@@ -161,18 +164,22 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                 ? "Login accepted · connecting to game world"
                 : !avatarLoaded
                     ? "World loaded · waiting for character"
-                    : !alive
-                        ? "Character loaded · not alive"
-                        : "Connected";
+                    : !playerLoaded
+                        ? "Character found · finishing initialization"
+                        : !alive
+                            ? "Character loaded · not alive"
+                            : "Connected";
         string connectionMessage = !loggedIn
             ? "The panel API is online. Waiting for AQW to confirm the game login."
             : !worldLoaded
                 ? $"AQW accepted the login{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" for {account}")}{(string.IsNullOrWhiteSpace(server) ? string.Empty : $" and selected {server}")}. Waiting for the game world to initialize."
                 : !avatarLoaded
                     ? $"The {server ?? "AQW"} world is loaded, but the character avatar has not initialized yet."
-                    : !alive
-                        ? "The AQW character is loaded, but not alive yet. Automation will unlock when the character is alive."
-                        : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
+                    : !playerLoaded
+                        ? "The character avatar exists, but VibeSkua is still waiting for inventory data, map loading, and character assets. Scripts will unlock when Player.Loaded is true."
+                        : !alive
+                            ? "The AQW character is loaded, but not alive yet. Automation will unlock when the character is alive."
+                            : $"AQW is connected{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" as {account}")} and ready for scripts and ButlerV5.";
 
         string? butlerBlockReason = HeadlessButlerCommand.GetStartBlockReason(_pluginManager);
 
@@ -185,6 +192,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             account,
             alive,
             avatarLoaded,
+            playerLoaded,
             worldLoaded,
             worldState = worldLoaded ? "Loaded" : loggedIn && !string.IsNullOrWhiteSpace(server) ? "Connecting" : loggedIn ? "Loading" : "Waiting",
             runtime,
@@ -221,13 +229,14 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                 string? server = _bot.Servers.LastName;
                 bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
                 bool avatarLoaded = worldLoaded && !_bot.Flash.IsNull("world.myAvatar");
+                bool playerLoaded = avatarLoaded && _bot.Player.Loaded;
                 bool alive = avatarLoaded && _bot.Player.Alive;
                 string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
                     ? acceptedAccount
                     : worldLoaded ? _bot.Player.Username : null;
 
                 lock (_statusSync)
-                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, alive, account, server);
+                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, playerLoaded, alive, account, server);
             }
             catch (Exception exception)
             {
@@ -339,7 +348,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     {
         (bool loginAccepted, _) = _sessionState.GetSnapshot();
         GameStatusSnapshot snapshot = GetStatusSnapshot();
-        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.AvatarLoaded && snapshot.Alive;
+        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.AvatarLoaded && snapshot.PlayerLoaded && snapshot.Alive;
     }
 
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
@@ -396,6 +405,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
         try
         {
+            EnsureTraceListener();
             _scriptManager.SetLoadedScript(fullPath);
             _scriptManager.SilentConfig = true;
             Exception? exception = await _scriptManager.StartScript();
@@ -410,6 +420,18 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             HeadlessConsole.Error($"Remote script start failed: {exception.Message}");
             return Results.Problem($"The script could not be started: {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Makes asynchronous script-thread exceptions visible in the headless console.
+    /// </summary>
+    private static void EnsureTraceListener()
+    {
+        if (Interlocked.Exchange(ref _traceListenerAttached, 1) != 0)
+            return;
+
+        Trace.Listeners.Add(new ConsoleTraceListener());
+        Trace.AutoFlush = true;
     }
 
     private IResult StopScript()
@@ -552,7 +574,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
     }
 
-    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool AvatarLoaded, bool Alive, string? Account, string? Server);
+    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool AvatarLoaded, bool PlayerLoaded, bool Alive, string? Account, string? Server);
     private sealed record ScriptStartRequest(string? Path);
     private sealed record ButlerStartRequest(string? Username, string? Duration);
 }
