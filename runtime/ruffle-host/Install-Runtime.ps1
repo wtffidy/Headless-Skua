@@ -133,10 +133,12 @@ function Build-HeadlessSkuaSwf {
     $patchedMainPath = Join-Path $patchedSourceRoot "skua\Main.as"
     $patchedWorldPath = Join-Path $patchedSourceRoot "skua\api\World.as"
     $patchedCombatPath = Join-Path $patchedSourceRoot "skua\api\Combat.as"
+    $patchedInventoryPath = Join-Path $patchedSourceRoot "skua\api\Inventory.as"
     $modulesContent = Get-Content -LiteralPath $patchedModulesPath -Raw
     $mainContent = Get-Content -LiteralPath $patchedMainPath -Raw
     $worldContent = Get-Content -LiteralPath $patchedWorldPath -Raw
     $combatContent = Get-Content -LiteralPath $patchedCombatPath -Raw
+    $inventoryContent = Get-Content -LiteralPath $patchedInventoryPath -Raw
 
     $moduleTogglePattern = 'module\.onToggle\(Main\.instance\.getGame\(\)\);'
     $moduleToggleReplacement = @'
@@ -162,6 +164,7 @@ var game:* = Main.instance.getGame();
     $moduleReadyHelper = @'
     private static function isGameReady(game:*):Boolean {
         return game != null && game.world != null && game.world.avatars != null
+            && game.world.myAvatar != null && game.world.myAvatar.items != null
             && game.ui != null && game.ui.ModalStack != null;
     }
 
@@ -294,6 +297,82 @@ var game:* = Main.instance.getGame();
         return $false
     }
 
+    $inventoryContentBeforePatch = $inventoryContent
+    $categoriesBefore = @'
+    private static function categories():* {
+        var domain:* = Main.instance.game.loaderInfo.applicationDomain;
+        return domain.hasDefinition("InvCat") ? domain.getDefinition("InvCat") : null;
+    }
+'@
+    $categoriesAfter = @'
+    private static function categories():* {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var domain:* = game != null && game.loaderInfo != null ? game.loaderInfo.applicationDomain : null;
+        return domain != null && domain.hasDefinition("InvCat") ? domain.getDefinition("InvCat") : null;
+    }
+'@
+    $inventoryContent = $inventoryContent.Replace($categoriesBefore, $categoriesAfter)
+
+    $bagSlotsBefore = @'
+    public static function inventoryBagUsedSlots():int {
+        var cat:* = categories();
+        var items:Array = Main.instance.game.world.myAvatar.items;
+        return cat == null ? items.length : cat.countBag(items);
+    }
+'@
+    $bagSlotsAfter = @'
+    public static function inventoryBagUsedSlots():int {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        var avatar:* = world != null ? world.myAvatar : null;
+        var items:Array = avatar != null && avatar.items is Array ? avatar.items as Array : [];
+        var cat:* = categories();
+        return cat == null ? items.length : cat.countBag(items);
+    }
+'@
+    $inventoryContent = $inventoryContent.Replace($bagSlotsBefore, $bagSlotsAfter)
+
+    $miscSlotsBefore = @'
+    public static function inventoryMiscUsedSlots():int {
+        var cat:* = categories();
+        return cat == null ? 0 : cat.countMisc(Main.instance.game.world.myAvatar.items);
+    }
+'@
+    $miscSlotsAfter = @'
+    public static function inventoryMiscUsedSlots():int {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        var avatar:* = world != null ? world.myAvatar : null;
+        if (avatar == null || !(avatar.items is Array)) return 0;
+        var cat:* = categories();
+        return cat == null ? 0 : cat.countMisc(avatar.items);
+    }
+'@
+    $inventoryContent = $inventoryContent.Replace($miscSlotsBefore, $miscSlotsAfter)
+
+    $spaceBefore = @'
+    public static function inventoryHasSpaceFor(itemJson:String, quantity:int = 1, purchase:Boolean = false, outgoingJson:String = null):String {
+        var world:* = Main.instance.game.world;
+        var item:Object = JSON.parse(itemJson);
+'@
+    $spaceAfter = @'
+    public static function inventoryHasSpaceFor(itemJson:String, quantity:int = 1, purchase:Boolean = false, outgoingJson:String = null):String {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        var avatar:* = world != null ? world.myAvatar : null;
+        if (avatar == null || avatar.items == null || avatar.objData == null) return "false";
+        var item:Object = JSON.parse(itemJson);
+'@
+    $inventoryContent = $inventoryContent.Replace($spaceBefore, $spaceAfter)
+    $inventoryContent = $inventoryContent.Replace("world.myAvatar.items", "avatar.items")
+    $inventoryContent = $inventoryContent.Replace("world.myAvatar.houseitems", "avatar.houseitems")
+    $inventoryContent = $inventoryContent.Replace("world.myAvatar.objData", "avatar.objData")
+
+    if ([string]::Equals($inventoryContentBeforePatch, $inventoryContent, [StringComparison]::Ordinal)) {
+        Write-Warning "The Skua inventory guards did not match the expected source; using the existing compiled client."
+        return $false
+    }
+
     $mainContentBeforePatch = $mainContent
     $mainContent = [regex]::Replace(
         $mainContent,
@@ -326,6 +405,7 @@ var game:* = Main.instance.getGame();
     Set-Content -LiteralPath $patchedMainPath -Value $mainContent -Encoding utf8
     Set-Content -LiteralPath $patchedWorldPath -Value $worldContent -Encoding utf8
     Set-Content -LiteralPath $patchedCombatPath -Value $combatContent -Encoding utf8
+    Set-Content -LiteralPath $patchedInventoryPath -Value $inventoryContent -Encoding utf8
 
     $compilerDirectory = Split-Path -Parent $CompilerPath
     if ([string]::IsNullOrWhiteSpace($env:FLEX_HOME)) {
