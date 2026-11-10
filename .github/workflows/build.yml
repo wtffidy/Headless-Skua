@@ -50,7 +50,7 @@ jobs:
         run: |
           $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.out.log"
           $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.err.log"
-          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run", "--script", "tests/Smoke/HeadlessSmoke.cs")
+          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run", "--script", "tests/Smoke/HeadlessSmoke.cs", "--skip-login")
           $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           try {
