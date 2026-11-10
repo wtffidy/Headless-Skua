@@ -46,7 +46,31 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         _logs = logs;
         _remoteEnabled = remoteEnabled;
         _port = port is >= 1 and <= 65535 ? port : throw new ArgumentOutOfRangeException(nameof(port));
-        _panelDirectory = Path.Combine(AppContext.BaseDirectory, "panel");
+        _panelDirectory = ResolvePanelDirectory();
+    }
+
+    /// <summary>
+    /// Resolves panel assets beside the actual executable before checking runtime extraction and development paths.
+    /// </summary>
+    /// <returns>The first panel directory containing index.html, or the executable-relative default.</returns>
+    private static string ResolvePanelDirectory()
+    {
+        string? executableDirectory = Path.GetDirectoryName(Environment.ProcessPath);
+        string[] candidates = new[]
+        {
+            string.IsNullOrWhiteSpace(executableDirectory) ? null : Path.Combine(executableDirectory, "panel"),
+            Path.Combine(AppContext.BaseDirectory, "panel"),
+            Path.Combine(Environment.CurrentDirectory, "panel")
+        }
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray()!;
+
+        foreach (string candidate in candidates)
+            if (File.Exists(Path.Combine(candidate, "index.html")))
+                return candidate;
+
+        return candidates.FirstOrDefault() ?? Path.Combine(AppContext.BaseDirectory, "panel");
     }
 
     /// <summary>
