@@ -64,6 +64,12 @@ To build, prepare the runtime, and execute an existing Skua C# script:
 Build.bat run --script "C:\\path\\to\\YourScript.cs"
 ```
 
+### Console login
+
+Starting the runtime opens the terminal UI. If VibeSkua Manager accounts are available, choose one from the numbered list; otherwise choose manual login and enter a username and password (the password is not echoed). After authentication, select an online game server from the numbered server list. Scripts and ButlerV5 start only after the game world is connected.
+
+The terminal supports the Midnight, Ember, and Neon themes with `--theme midnight`, `--theme ember`, or `--theme neon`. Use `--no-color` or set `NO_COLOR` to disable ANSI styling.
+
 ### Plugins and ButlerV5
 
 Headless Skua initializes Skua's plugin manager and discovers plugin assemblies from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) as well as the host's local plugins folder. Plugins that rely on interactive desktop windows cannot show those windows in headless mode; their non-UI functionality can still run when their dependencies support the headless host.
