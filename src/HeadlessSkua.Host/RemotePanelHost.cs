@@ -183,7 +183,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
         string requestedPath = (relativeDirectory ?? string.Empty).Replace('\\', '/').Trim('/');
         if (Path.IsPathRooted(relativeDirectory ?? string.Empty)
-            || requestedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+            || requestedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment =>
+                segment is "." or ".." || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
             return Results.BadRequest(new { error = "The explorer can only browse inside the VibeSkua Scripts folder." });
 
         try
@@ -233,7 +234,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
             string? parentPath = string.IsNullOrEmpty(requestedPath)
                 ? null
-                : Path.GetDirectoryName(requestedPath.Replace('/', Path.DirectorySeparatorChar))?.Replace(Path.DirectorySeparatorChar, '/');
+                : Path.GetDirectoryName(requestedPath.Replace('/', Path.DirectorySeparatorChar))?.Replace(Path.DirectorySeparatorChar, '/') ?? string.Empty;
 
             return Results.Ok(new
             {
@@ -273,7 +274,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         string scriptsRoot = Path.GetFullPath(ClientFileSources.SkuaScriptsDIR);
         string relativePath = request.Path.Replace('\\', '/').Trim('/');
         if (Path.IsPathRooted(request.Path)
-            || relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..")
+            || relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment =>
+                segment is "." or ".." || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             || !relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             return Results.BadRequest(new { error = "Choose a C# script from inside the VibeSkua Scripts folder." });
 
