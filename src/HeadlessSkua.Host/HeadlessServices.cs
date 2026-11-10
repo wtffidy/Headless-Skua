@@ -4,6 +4,7 @@ using Skua.Core.GameProxy;
 using Skua.Core.Interfaces.Services;
 using Skua.Core.Interfaces;
 using Skua.Core.Options;
+using Skua.Core.Plugins;
 using Skua.Core.Scripts;
 using Skua.Core.Scripts.Helpers;
 using Skua.Core.Services;
@@ -30,6 +31,10 @@ internal static class HeadlessServices
         services.AddSingleton<ISettingsService, HeadlessSettingsService>();
         services.AddSingleton<IDialogService, HeadlessDialogService>();
         services.AddSingleton<ILogService, HeadlessLogService>();
+        services.AddSingleton<IDispatcherService, HeadlessDispatcherService>();
+        services.AddSingleton<IPluginHelper, HeadlessPluginHelper>();
+        services.AddSingleton<PluginManager>();
+        services.AddSingleton<IPluginManager>(provider => provider.GetRequiredService<PluginManager>());
         services.AddTransient(Skua.Core.AppStartup.Services.CreateCompiler);
 
         services.AddSingleton<ScriptManager>();
