@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Skua.Core.Utils;
 using Skua.Headless.UI;
 using TerminalLogLevel = Skua.Headless.UI.LogLevel;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -24,11 +25,6 @@ namespace HeadlessSkua;
 /// </summary>
 internal sealed class RuffleRuntime : IAsyncDisposable
 {
-    private static readonly HttpClient SocketServerListClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(8)
-    };
-
     private static readonly Dictionary<string, int[]> FallbackSocketHosts = new(StringComparer.OrdinalIgnoreCase)
     {
         ["sock7.aq.com"] = new[] { 5588, 5589, 5591, 5592, 5593, 5594, 843 },
@@ -124,8 +120,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         try
         {
-            using HttpResponseMessage response = await SocketServerListClient.GetAsync(
-                "https://game.aq.com/game/api/data/servers",
+            // Use the same authenticated AQW content client and endpoint as VibeSkua's
+            // ScriptServers.GetServers implementation instead of the newer game.aq.com route.
+            using HttpResponseMessage response = await HttpClients.GetGHClient().GetAsync(
+                "http://content.aq.com/game/api/data/servers",
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken);
             response.EnsureSuccessStatusCode();
