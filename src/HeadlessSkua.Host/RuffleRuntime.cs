@@ -64,6 +64,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         await StartStaticHostAsync(cancellationToken);
         await StartBrowserAsync(cancellationToken);
+        await ConfigureLocalGameClientRouteAsync(cancellationToken);
 
         string address = GetServerAddress();
         string localSwfPath = Path.Combine(_runtimeDirectory, "game", "skua.swf");
@@ -87,6 +88,42 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             new PageWaitForFunctionOptions { Timeout = 120_000 });
 
         HeadlessConsole.Success("Ruffle reports that the SWF has loaded.");
+    }
+
+    /// <summary>
+    /// Serves the repository's matching AQW game client locally when the Skua bootstrap requests it.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel loading the local game client.</param>
+    private async Task ConfigureLocalGameClientRouteAsync(CancellationToken cancellationToken)
+    {
+        string localGameClientPath = Path.Combine(_runtimeDirectory, "game", "Game4000r8.swf");
+        if (!File.Exists(localGameClientPath))
+        {
+            HeadlessConsole.Warn("No local Game4000r8.swf was found; AQW will use its online game client.");
+            return;
+        }
+
+        byte[] localGameClient = await File.ReadAllBytesAsync(localGameClientPath, cancellationToken);
+        await _page!.RouteAsync("**/gamefiles/**", async route =>
+        {
+            string requestedFileName = Path.GetFileName(new Uri(route.Request.Url).AbsolutePath);
+            if (!requestedFileName.Equals("Game4000r8.swf", StringComparison.OrdinalIgnoreCase))
+            {
+                await route.ContinueAsync();
+                return;
+            }
+
+            await route.FulfillAsync(new RouteFulfillOptions
+            {
+                Status = 200,
+                ContentType = "application/x-shockwave-flash",
+                BodyBytes = localGameClient
+            });
+
+            HeadlessConsole.Success("Serving the uploaded Game4000r8.swf locally.");
+        });
+
+        HeadlessConsole.Info("Local AQW game-client override is ready.");
     }
 
     /// <summary>
