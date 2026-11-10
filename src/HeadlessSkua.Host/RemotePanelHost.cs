@@ -239,7 +239,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             bool loggedIn = loginAccepted || TryReadStatusValue("player login", () => _bot.Player.LoggedIn, false, warnedStatusFields);
             string? server = TryReadStatusValue<string?>("server", () => _bot.Servers.LastName, null, warnedStatusFields);
             bool worldLoaded = loggedIn && TryReadStatusValue("game world", () => _bot.Flash.IsWorldLoaded, false, warnedStatusFields);
-            bool avatarLoaded = worldLoaded && TryReadStatusValue("character avatar", () => !_bot.Flash.IsNull("world.myAvatar"), false, warnedStatusFields);
+            bool avatarLoaded = worldLoaded && TryReadStatusValue("character avatar", IsLocalAvatarPresent, false, warnedStatusFields);
             string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
                 ? acceptedAccount
                 : worldLoaded ? TryReadStatusValue<string?>("account", () => _bot.Player.Username, null, warnedStatusFields) : null;
@@ -299,6 +299,25 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Detects the local character through world.myAvatar, with a fallback to the
+    /// isMyAvatar marker when AQW populates world.avatars before assigning myAvatar.
+    /// </summary>
+    /// <returns>True when the local character exists in the current world.</returns>
+    private bool IsLocalAvatarPresent()
+    {
+        if (!_bot.Flash.IsNull("world.myAvatar"))
+            return true;
+
+        int avatarCount = _bot.Flash.GetGameObject<int>("world.avatars.length", 0);
+        int scanCount = Math.Min(Math.Max(avatarCount, 0), 256);
+        for (int index = 0; index < scanCount; index++)
+            if (_bot.Flash.GetGameObject<bool>($"world.avatars.{index}.isMyAvatar", false))
+                return true;
+
+        return false;
     }
 
     /// <summary>
