@@ -78,7 +78,8 @@ function Build-HeadlessSkuaSwf {
     }
 
     $patchedSourceRoot = Join-Path $TemporaryRoot "patched-as3-src"
-    Copy-Item -LiteralPath $SourceRoot -Destination $patchedSourceRoot -Recurse -Force
+    New-Item -ItemType Directory -Path $patchedSourceRoot -Force | Out-Null
+    Copy-Item -Path (Join-Path $SourceRoot "*") -Destination $patchedSourceRoot -Recurse -Force
 
     $patchedModulesPath = Join-Path $patchedSourceRoot "skua\module\Modules.as"
     $patchedMainPath = Join-Path $patchedSourceRoot "skua\Main.as"
