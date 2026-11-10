@@ -117,10 +117,11 @@ Build.bat run --remote
 
 The panel prints the host's available IPv4 addresses at startup. Open `http://HOST-IP:8788` from another device. This includes the machine's LAN address and VPN address when the VPN adapter is active. Change the port with `--panel-port 8790`, or disable the panel with `--no-panel`.
 
-The first panel version exposes:
-- Runtime connection and selected server status.
+The panel exposes:
+- Separate panel/API status and AQW character readiness, including login, world-load, and alive state.
+- A script picker populated from the host's `%APPDATA%\\VibeSkua\\Scripts` folder, plus manual full-path entry.
 - Start and stop for existing Skua C# scripts.
-- Start and stop for ButlerV5, including an optional duration.
+- Start and stop for ButlerV5, including an optional duration and a visible reason when Butler cannot start.
 - Recent Script, Debug, and Flash log output.
 
 **Important:** `--remote` binds to `0.0.0.0` and the panel/API has no login protection in this initial version. Use it only on a trusted LAN or private VPN, keep the port closed to the public internet, and do not configure router port forwarding. Anyone who can reach the panel can issue its available controls. The game login and server selection remain in the host terminal for now. Script paths entered in the panel refer to files on the Headless Skua computer, not the phone or browser device.
