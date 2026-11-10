@@ -74,7 +74,7 @@ jobs:
           $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.out.log"
           $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.err.log"
           $smokeScript = (Resolve-Path "tests/Smoke/HeadlessSmoke.cs").Path
-          $arguments = @("run", "--script", $smokeScript, "--skip-login")
+          $arguments = @("run", "--script", $smokeScript, "--skip-login", "--quiet")
           $process = Start-Process -FilePath (Join-Path $publishDir "HeadlessSkua.exe") -ArgumentList $arguments -WorkingDirectory $publishDir -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           try {
