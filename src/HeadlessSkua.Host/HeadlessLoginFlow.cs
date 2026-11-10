@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Skua.Core.Interfaces;
 using Skua.Core.Models;
@@ -29,6 +30,7 @@ internal static class HeadlessLoginFlow
 
         bot.Servers.SetLoginInfo(username, password);
         HeadlessConsole.Info($"Authenticating {username}...");
+        Stopwatch authenticationTimer = Stopwatch.StartNew();
         bot.Servers.Login(username, password);
 
         if (!await WaitForServerListAsync(bot, cancellationToken))
@@ -37,6 +39,7 @@ internal static class HeadlessLoginFlow
             return false;
         }
 
+        HeadlessConsole.Info($"AQW server list ready in {authenticationTimer.Elapsed.TotalSeconds:F1}s.");
         List<Server> servers = bot.Servers.ServerList.ToList();
         if (servers.Count == 0)
             servers = await bot.Servers.GetServers(true);
@@ -218,18 +221,25 @@ internal static class HeadlessLoginFlow
     /// <returns>True when the player is playing and the world is loaded.</returns>
     private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, HeadlessSessionState sessionState, TimeSpan timeout, CancellationToken cancellationToken)
     {
+        Stopwatch connectionTimer = Stopwatch.StartNew();
         DateTime deadline = DateTime.UtcNow.Add(timeout);
-        DateTime nextDiagnostic = DateTime.MaxValue;
+        DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+        DateTime nextPlayingCheck = DateTime.MaxValue;
+        DateTime nextPlayerLoadedCheck = DateTime.MaxValue;
         DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
         bool loginResponseReceived = false;
+        bool worldReady = false;
+        bool avatarReady = false;
+        bool playing = false;
+        bool playerReady = false;
+
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
-            // Do not call back into Ruffle while it is still dispatching the server-login
-            // response through ExternalInterface. Wait for the host callback to finish first.
+            // Wait for the host-side login response handler to finish before making
+            // synchronous calls back into the Ruffle page.
             if (!loginResponseReceived)
             {
-                bool loginAccepted = sessionState.GetSnapshot().LoginAccepted;
-                if (!loginAccepted)
+                if (!sessionState.GetSnapshot().LoginAccepted)
                 {
                     if (DateTime.UtcNow >= nextHeartbeat)
                     {
@@ -242,46 +252,68 @@ internal static class HeadlessLoginFlow
                 }
 
                 loginResponseReceived = true;
-                await Task.Delay(500, cancellationToken);
-                HeadlessConsole.Debug("AQW login response received. Starting game-world initialization checks.");
-                nextDiagnostic = DateTime.UtcNow;
+                HeadlessConsole.Debug($"AQW accepted the game login after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
+                await Task.Delay(100, cancellationToken);
             }
 
-            if (DateTime.UtcNow >= nextDiagnostic)
+            DateTime now = DateTime.UtcNow;
+            if (!worldReady)
             {
-                HeadlessConsole.Debug("AQW initialization probe: checking objLogin...");
-                bool loginDataLoaded = !bot.Flash.IsNull("objLogin");
-                HeadlessConsole.Debug($"AQW initialization probe: objLogin={loginDataLoaded}; checking objServerInfo...");
-                bool serverDataLoaded = !bot.Flash.IsNull("objServerInfo");
-                HeadlessConsole.Debug($"AQW initialization probe: objServerInfo={serverDataLoaded}; checking world...");
-                bool worldLoaded = bot.Flash.IsWorldLoaded;
-                HeadlessConsole.Debug($"AQW initialization probe: world={worldLoaded}; checking avatar...");
-                bool avatarLoaded = worldLoaded && !bot.Flash.IsNull("world.myAvatar");
-                bool playerLoaded = avatarLoaded && bot.Player.Loaded;
-                HeadlessConsole.Debug($"AQW initialization: objLogin={loginDataLoaded}, objServerInfo={serverDataLoaded}, world={worldLoaded}, avatar={avatarLoaded}, playerLoaded={playerLoaded}.");
-                nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+                worldReady = bot.Flash.IsWorldLoaded;
+                if (worldReady)
+                    HeadlessConsole.Debug($"AQW world initialized after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
             }
 
-            // Keep the heartbeat independent of ActionScript queries so a stalled browser
-            // bridge cannot make the entire connection wait appear silent.
-            if (DateTime.UtcNow >= nextHeartbeat)
+            if (worldReady && !avatarReady)
             {
-                HeadlessConsole.Debug("AQW initialization is still waiting for the game world.");
-                nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
+                avatarReady = !bot.Flash.IsNull("world.myAvatar");
+                if (avatarReady)
+                {
+                    HeadlessConsole.Debug($"AQW character avatar appeared after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
+                    nextPlayingCheck = DateTime.MinValue;
+                }
             }
 
-            bool worldReady = bot.Flash.IsWorldLoaded;
-            bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
-            if (avatarReady && bot.Player.Playing && bot.Player.Loaded)
-                return true;
+            if (avatarReady && now >= nextPlayingCheck)
+            {
+                playing = bot.Player.Playing;
+                nextPlayingCheck = now.AddMilliseconds(500);
+                if (playing)
+                    nextPlayerLoadedCheck = DateTime.MinValue;
+            }
+
+            if (playing && !playerReady && now >= nextPlayerLoadedCheck)
+            {
+                playerReady = bot.Player.Loaded;
+                nextPlayerLoadedCheck = now.AddMilliseconds(500);
+                if (playerReady)
+                {
+                    HeadlessConsole.Debug($"VibeSkua player fully loaded after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
+                    return true;
+                }
+            }
+
+            if (now >= nextDiagnostic)
+            {
+                HeadlessConsole.Debug($"AQW initialization: world={worldReady}, avatar={avatarReady}, playing={playing}, playerLoaded={playerReady} ({connectionTimer.Elapsed.TotalSeconds:F1}s).");
+                nextDiagnostic = now.AddSeconds(5);
+            }
+
+            if (now >= nextHeartbeat)
+            {
+                HeadlessConsole.Debug("AQW initialization is still waiting for the player.");
+                nextHeartbeat = now.AddSeconds(5);
+            }
 
             await Task.Delay(250, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        bool worldReady = bot.Flash.IsWorldLoaded;
-        bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
-        return avatarReady && bot.Player.Playing && bot.Player.Loaded;
+        worldReady = bot.Flash.IsWorldLoaded;
+        avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
+        playing = avatarReady && bot.Player.Playing;
+        playerReady = playing && bot.Player.Loaded;
+        return playerReady;
     }
 
     /// <summary>
@@ -328,6 +360,8 @@ internal static class HeadlessLoginFlow
     private static async Task<bool> WaitForServerListAsync(IScriptInterface bot, CancellationToken cancellationToken)
     {
         DateTime deadline = DateTime.UtcNow.AddSeconds(90);
+        DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
             string? modalMessage = null;
@@ -339,6 +373,7 @@ internal static class HeadlessLoginFlow
             {
                 HeadlessConsole.Debug($"Login dialog status is unavailable: {exception.Message}");
             }
+
             if (!string.IsNullOrWhiteSpace(modalMessage) && !string.Equals(modalMessage, "null", StringComparison.OrdinalIgnoreCase))
             {
                 HeadlessConsole.Error($"Login rejected: {modalMessage.Trim()}");
@@ -354,13 +389,11 @@ internal static class HeadlessLoginFlow
                 return false;
             }
 
-            bool loginVisible = bot.Flash.GetGameObject<bool>("mcLogin.visible", false);
-            bool serverListExists = !bot.Flash.IsNull("mcLogin.sl.iList");
-            int serverEntries = bot.Flash.GetGameObject<int>("mcLogin.sl.iList.numChildren", 0);
-            bool hasServerData = bot.Servers.ServerList.Any(server =>
+            List<Server> serverList = bot.Servers.ServerList;
+            bool hasServerData = serverList.Any(server =>
                 !string.IsNullOrWhiteSpace(server.Name) && !string.IsNullOrWhiteSpace(server.IP));
 
-            if (loginVisible && serverListExists && serverEntries > 0 && hasServerData)
+            if (hasServerData)
             {
                 try
                 {
@@ -374,7 +407,13 @@ internal static class HeadlessLoginFlow
                 return true;
             }
 
-            await Task.Delay(250, cancellationToken);
+            if (DateTime.UtcNow >= nextDiagnostic)
+            {
+                HeadlessConsole.Debug("Waiting for AQW to populate its server list...");
+                nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+            }
+
+            await Task.Delay(500, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
