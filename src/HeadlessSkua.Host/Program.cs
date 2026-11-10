@@ -117,12 +117,18 @@ internal static class Program
         string gameVersion = GetOption(args, "--game-version") ?? "r8";
         if (!gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase)
             && !gameVersion.Equals("r8", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("The game version must be either r4 or r8.", "--game-version");
+        {
+            HeadlessConsole.Error("Invalid --game-version. Choose r4 or r8.");
+            return 1;
+        }
 
         string gameClientFileName = $"Game4000{gameVersion.ToLowerInvariant()}.swf";
         string gameClientPath = Path.Combine(runtimeDirectory, "game", gameClientFileName);
         if (gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase) && !File.Exists(gameClientPath))
-            throw new FileNotFoundException("The R4 game client was selected but is not installed in the runtime game folder.", gameClientPath);
+        {
+            HeadlessConsole.Error($"The R4 game client was selected but was not found: {gameClientPath}");
+            return 1;
+        }
 
         HeadlessConsole.Info($"Selected AQW game client: {gameClientFileName}.");
         using CancellationTokenSource cancellationTokenSource = new();
