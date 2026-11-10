@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace HeadlessSkua;
 
 internal static class Program
@@ -9,7 +11,7 @@ internal static class Program
     /// </summary>
     /// <param name="args">Command-line arguments supplied by the process.</param>
     /// <returns>A process exit code indicating success or failure.</returns>
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         if (args.Length == 0 || args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
@@ -30,14 +32,73 @@ internal static class Program
         }
 
         if (args.Contains("run", StringComparer.OrdinalIgnoreCase))
-        {
-            Console.Error.WriteLine("The headless game runtime is not available yet. See docs/roadmap.md for the current milestone.");
-            return 2;
-        }
+            return await RunAsync(args);
 
         Console.Error.WriteLine($"Unknown command: {args[0]}");
         PrintHelp();
         return 1;
+    }
+
+    /// <summary>
+    /// Starts one headless Ruffle game session and keeps it alive until shutdown.
+    /// </summary>
+    /// <param name="args">Command-line arguments containing runtime and SWF paths.</param>
+    /// <returns>A process exit code indicating whether the session started successfully.</returns>
+    private static async Task<int> RunAsync(string[] args)
+    {
+        string runtimeDirectory = GetOption(args, "--runtime-dir") ?? Path.Combine("runtime", "ruffle-host");
+        string swfPath = GetOption(args, "--swf") ?? Path.Combine(runtimeDirectory, "game", "skua.swf");
+        using CancellationTokenSource cancellationTokenSource = new();
+
+        ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            cancellationTokenSource.Cancel();
+        };
+
+        Console.CancelKeyPress += cancelHandler;
+
+        try
+        {
+            await using RuffleRuntime runtime = new(runtimeDirectory);
+            runtime.HostCallReceived += (name, values) =>
+                Console.WriteLine($"[AS3 -> Host] {name}: {values.GetRawText()}");
+
+            await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
+            Console.WriteLine("Headless game runtime started. Press Ctrl+C to stop.");
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
+            return 0;
+        }
+        catch (OperationCanceledException) when (cancellationTokenSource.IsCancellationRequested)
+        {
+            Console.WriteLine("Stopping Headless Skua...");
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Headless Skua failed: {exception.Message}");
+            return 2;
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+        }
+    }
+
+    /// <summary>
+    /// Returns the value following a command-line option, when supplied.
+    /// </summary>
+    /// <param name="args">All command-line arguments.</param>
+    /// <param name="option">Option name to locate.</param>
+    /// <returns>The option value, or null when it was not supplied.</returns>
+    private static string? GetOption(string[] args, string option)
+    {
+        for (int index = 0; index < args.Length - 1; index++)
+            if (string.Equals(args[index], option, StringComparison.OrdinalIgnoreCase))
+                return args[index + 1];
+
+        return null;
     }
 
     /// <summary>
@@ -52,8 +113,13 @@ internal static class Program
               HeadlessSkua [command] [options]
 
             Commands:
-              doctor             Check the local runtime prerequisites.
-              run                Start a game session (runtime prototype pending).
+              doctor             Check local runtime prerequisites.
+              run                Start the headless game runtime.
+
+            Run options:
+              --swf <path>       Path to the Skua SWF (defaults to runtime game/skua.swf).
+              --runtime-dir <path>
+                                 Ruffle host directory (defaults to runtime/ruffle-host).
 
             Options:
               -h, --help         Show this help.
@@ -67,11 +133,11 @@ internal static class Program
     private static void PrintDiagnostics()
     {
         Console.WriteLine($"Headless Skua {Version}");
-        Console.WriteLine($"Operating system : {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
-        Console.WriteLine($"Architecture     : {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}");
+        Console.WriteLine($"Operating system : {RuntimeInformation.OSDescription}");
+        Console.WriteLine($"Architecture     : {RuntimeInformation.ProcessArchitecture}");
         Console.WriteLine($".NET runtime     : {Environment.Version}");
         Console.WriteLine($"Base directory   : {AppContext.BaseDirectory}");
-        Console.WriteLine("Game runtime     : Not installed");
-        Console.WriteLine("Session status   : Not started");
+        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine("runtime", "ruffle-host", "ruffle", "ruffle.js"))}");
+        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine("runtime", "ruffle-host", "game", "skua.swf"))}");
     }
 }
