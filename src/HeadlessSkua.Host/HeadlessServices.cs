@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Skua.Core.AppStartup;
 using Skua.Core.GameProxy;
 using Skua.Core.Interfaces;
 using Skua.Core.Options;
