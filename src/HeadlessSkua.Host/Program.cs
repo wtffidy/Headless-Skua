@@ -157,6 +157,19 @@ internal static class Program
             IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
 
+            await using RemotePanelHost? remotePanel = args.Contains("--no-panel", StringComparer.OrdinalIgnoreCase)
+                ? null
+                : new RemotePanelHost(
+                    scriptInterface,
+                    scriptManager,
+                    pluginManager,
+                    serviceProvider.GetRequiredService<HeadlessLogService>(),
+                    args.Contains("--remote", StringComparer.OrdinalIgnoreCase),
+                    GetPanelPort(args));
+
+            if (remotePanel is not null)
+                await remotePanel.StartAsync(cancellationTokenSource.Token);
+
             if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
                 && !await HeadlessLoginFlow.LoginAsync(scriptInterface, cancellationTokenSource.Token))
                 return 4;
@@ -243,6 +256,23 @@ internal static class Program
     }
 
     /// <summary>
+    /// Reads and validates the optional remote panel port.
+    /// </summary>
+    /// <param name="args">Command-line arguments.</param>
+    /// <returns>The configured panel port, or 8788 when omitted.</returns>
+    private static int GetPanelPort(string[] args)
+    {
+        string? value = GetOption(args, "--panel-port");
+        if (string.IsNullOrWhiteSpace(value))
+            return 8788;
+
+        if (!int.TryParse(value, out int port) || port is < 1 or > 65535)
+            throw new ArgumentOutOfRangeException("--panel-port", "The panel port must be between 1 and 65535.");
+
+        return port;
+    }
+
+    /// <summary>
     /// Prints supported commands and options.
     /// </summary>
     private static void PrintHelp()
@@ -265,8 +295,16 @@ internal static class Program
               --runtime-dir <path>
                                  Ruffle host directory (defaults to runtime/ruffle-host).
               --script <path>   Existing Skua C# script to execute after client initialization.
+              --remote          Bind the web panel to 0.0.0.0 for trusted LAN/VPN access.
+              --panel-port <port>
+                                 Web panel port (default: 8788).
+              --no-panel        Disable the web panel.
               --theme <name>    Console theme: midnight, ember, or neon.
               --no-color        Disable terminal colours.
+
+            Remote panel:
+              Open http://127.0.0.1:8788 locally, or use --remote for LAN/VPN access.
+              Remote control has no login in this version. Do not port-forward the panel port.
 
             Options:
               -h, --help         Show this help.
