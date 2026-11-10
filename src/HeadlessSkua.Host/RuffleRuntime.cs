@@ -227,7 +227,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         }
         catch (Exception exception) when (exception is SocketException or IOException)
         {
-            HeadlessConsole.Debug($"AQW socket proxy could not connect to {host}:{port}: {exception.Message}");
+            HeadlessConsole.Warn($"AQW socket proxy could not connect to {host}:{port}: {exception.Message}");
             context.Response.StatusCode = StatusCodes.Status502BadGateway;
             return;
         }
@@ -236,7 +236,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         using CancellationTokenSource relayCancellation = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         NetworkStream networkStream = tcpClient.GetStream();
 
-        HeadlessConsole.Debug($"AQW socket tunnel connected: {host}:{port}.");
+        HeadlessConsole.Success($"AQW socket tunnel connected: {host}:{port}.");
 
         Task clientToServer = RelayWebSocketToTcpAsync(webSocket, networkStream, relayCancellation.Token);
         Task serverToClient = RelayTcpToWebSocketAsync(networkStream, webSocket, relayCancellation.Token);
