@@ -322,8 +322,8 @@ internal static class Program
         Console.WriteLine($"Architecture     : {RuntimeInformation.ProcessArchitecture}");
         Console.WriteLine($".NET runtime     : {Environment.Version}");
         Console.WriteLine($"Base directory   : {AppContext.BaseDirectory}");
-        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine("runtime", "ruffle-host", "ruffle", "ruffle.js"))}");
-        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine("runtime", "ruffle-host", "game", "skua.swf"))}");
+        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host", "ruffle", "ruffle.js"))}");
+        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host", "game", "skua.swf"))}");
         Console.WriteLine($"Remote panel     : {File.Exists(Path.Combine(AppContext.BaseDirectory, "panel", "index.html"))}");
         Console.WriteLine($"Playwright Node  : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "node", "win32_x64", "node.exe"))}");
         Console.WriteLine($"Playwright CLI   : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "package", "cli.js"))}");
