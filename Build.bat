@@ -101,6 +101,11 @@ if not exist "%OUTPUT_DIR%\HeadlessSkua.exe" (
     goto :failed
 )
 
+if not exist "%OUTPUT_DIR%\panel\index.html" (
+    echo [ERROR] Remote panel assets were not published.
+    goto :failed
+)
+
 echo.
 echo [8/8] Checking published installation...
 "%OUTPUT_DIR%\HeadlessSkua.exe" doctor
