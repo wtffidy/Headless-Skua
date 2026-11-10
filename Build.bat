@@ -1,13 +1,18 @@
 @echo off
 setlocal EnableExtensions
-title Headless Skua - All-in-One Build
+title Headless Skua - Build
 
 cd /d "%~dp0"
 if errorlevel 1 exit /b 1
 
+set "OUTPUT_DIR=%~dp0Build"
+set "PROJECT=src\HeadlessSkua.Host\HeadlessSkua.Host.csproj"
+set "CONFIGURATION=Release"
+set "RUNTIME=win-x64"
+
 echo.
 echo  ==========================================
-echo           HEADLESS SKUA - AIO
+echo           HEADLESS SKUA - BUILD
 echo  ==========================================
 echo.
 
@@ -21,7 +26,6 @@ if errorlevel 1 (
 dotnet --list-sdks | findstr /B "10." >nul
 if errorlevel 1 (
     echo [ERROR] .NET 10 SDK was not found.
-    echo Install it from https://dotnet.microsoft.com/download/dotnet/10.0
     goto :failed
 )
 
@@ -31,7 +35,7 @@ if errorlevel 1 (
     goto :failed
 )
 
-echo [1/6] Initializing VibeSkua source...
+echo [1/7] Initializing VibeSkua source...
 git submodule update --init --recursive
 if errorlevel 1 goto :failed
 
@@ -41,16 +45,16 @@ if not exist "vendor\VibeSkua\Skua.Core\Skua.Core.csproj" (
 )
 
 echo.
-echo [2/6] Restoring solution...
+echo [2/7] Restoring solution...
 dotnet restore HeadlessSkua.sln
 if errorlevel 1 goto :failed
 
 echo.
-echo [3/6] Building Headless Skua...
-dotnet build HeadlessSkua.sln --configuration Release --no-restore
+echo [3/7] Building solution...
+dotnet build HeadlessSkua.sln --configuration %CONFIGURATION% --no-restore
 if errorlevel 1 goto :failed
 
-set "PLAYWRIGHT_SCRIPT=src\HeadlessSkua.Host\bin\Release\net10.0\playwright.ps1"
+set "PLAYWRIGHT_SCRIPT=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0\playwright.ps1"
 if not exist "%PLAYWRIGHT_SCRIPT%" (
     echo [ERROR] Playwright install script was not generated.
     goto :failed
@@ -64,18 +68,34 @@ if not errorlevel 1 (
 )
 
 echo.
-echo [4/6] Installing headless Chromium...
+echo [4/7] Installing headless Chromium...
 %POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "%PLAYWRIGHT_SCRIPT%" install chromium
 if errorlevel 1 goto :failed
 
 echo.
-echo [5/6] Installing Ruffle and the Skua game client...
+echo [5/7] Installing Ruffle and the Skua game client...
 %POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "runtime\ruffle-host\Install-Runtime.ps1"
 if errorlevel 1 goto :failed
 
 echo.
-echo [6/6] Checking installation...
-dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- doctor
+echo [6/7] Publishing standalone Windows build...
+if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
+dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true --no-restore -o "%OUTPUT_DIR%"
+if errorlevel 1 goto :failed
+
+echo.
+echo Copying Ruffle runtime and game files...
+xcopy "runtime\ruffle-host" "%OUTPUT_DIR%\runtime\ruffle-host\" /E /I /Y >nul
+if errorlevel 1 goto :failed
+
+if not exist "%OUTPUT_DIR%\HeadlessSkua.exe" (
+    echo [ERROR] Published executable was not created.
+    goto :failed
+)
+
+echo.
+echo [7/7] Checking published installation...
+"%OUTPUT_DIR%\HeadlessSkua.exe" doctor
 if errorlevel 1 goto :failed
 
 echo.
@@ -83,28 +103,37 @@ echo  ==========================================
 echo       HEADLESS SKUA BUILD COMPLETE
 echo  ==========================================
 echo.
+echo Published application:
+echo   %OUTPUT_DIR%\HeadlessSkua.exe
+echo.
 echo Starting Headless Skua...
 echo.
 
-if /I "%~1"=="run" goto :launch
 if /I "%~1"=="-butler" goto :butler
-
+if /I "%~1"=="run" goto :launch
 goto :default_launch
 
 :default_launch
-dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run
-exit /b %errorlevel%
+pushd "%OUTPUT_DIR%"
+HeadlessSkua.exe run
+set "EXIT_CODE=%errorlevel%"
+popd
+exit /b %EXIT_CODE%
 
 :launch
 shift
-echo Starting Headless Skua...
-dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run %*
-exit /b %errorlevel%
+pushd "%OUTPUT_DIR%"
+HeadlessSkua.exe run %*
+set "EXIT_CODE=%errorlevel%"
+popd
+exit /b %EXIT_CODE%
 
 :butler
-echo Starting headless ButlerV5...
-dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- %*
-exit /b %errorlevel%
+pushd "%OUTPUT_DIR%"
+HeadlessSkua.exe %*
+set "EXIT_CODE=%errorlevel%"
+popd
+exit /b %EXIT_CODE%
 
 :failed
 echo.
