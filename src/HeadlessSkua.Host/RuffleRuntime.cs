@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -22,8 +24,22 @@ namespace HeadlessSkua;
 /// </summary>
 internal sealed class RuffleRuntime : IAsyncDisposable
 {
+    private static readonly HttpClient SocketServerListClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(8)
+    };
+
+    private static readonly Dictionary<string, int[]> FallbackSocketHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["sock7.aq.com"] = new[] { 5588, 5589, 5591, 5592, 5593, 5594, 843 },
+        ["sock8.aq.com"] = new[] { 5588, 5589, 5590, 5591, 5593, 843 },
+        ["euro.aqw.artix.com"] = new[] { 5588, 843 },
+        ["asia.game.artix.com"] = new[] { 5588, 843 }
+    };
+
     private readonly string _runtimeDirectory;
     private readonly SemaphoreSlim _pageLock = new(1, 1);
+    private readonly HashSet<SocketTarget> _socketTargets = new();
     private WebApplication? _webApplication;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
@@ -63,6 +79,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         if (!File.Exists(fullSwfPath))
             throw new FileNotFoundException("The Skua SWF was not found. Supply --swf or install it into runtime/game/skua.swf.", fullSwfPath);
 
+        await LoadSocketTargetsAsync(cancellationToken);
         await StartStaticHostAsync(cancellationToken);
         await StartBrowserAsync(cancellationToken);
         await ConfigureLocalGameClientRouteAsync(cancellationToken);
@@ -90,6 +107,218 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         HeadlessConsole.Success("Ruffle reports that the SWF has loaded.");
     }
+
+    /// <summary>
+    /// Loads live AQW socket endpoints and merges in a small fallback list for server-list outages.
+    /// Each endpoint gets a port 843 route for Flash cross-domain policy requests.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the server-list request.</param>
+    private async Task LoadSocketTargetsAsync(CancellationToken cancellationToken)
+    {
+        foreach (KeyValuePair<string, int[]> fallback in FallbackSocketHosts)
+            foreach (int port in fallback.Value)
+                AddSocketTarget(fallback.Key, port);
+
+        try
+        {
+            using HttpResponseMessage response = await SocketServerListClient.GetAsync(
+                "https://game.aq.com/game/api/data/servers",
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            await using Stream responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using JsonDocument document = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken);
+            JsonElement servers = document.RootElement;
+
+            if (servers.ValueKind == JsonValueKind.Object)
+            {
+                if (servers.TryGetProperty("servers", out JsonElement nestedServers)
+                    || servers.TryGetProperty("data", out nestedServers))
+                    servers = nestedServers;
+            }
+
+            if (servers.ValueKind != JsonValueKind.Array)
+                throw new JsonException("The AQW server-list response was not an array.");
+
+            int serverCount = 0;
+            foreach (JsonElement server in servers.EnumerateArray())
+            {
+                if (!server.TryGetProperty("sIP", out JsonElement hostElement)
+                    || !server.TryGetProperty("iPort", out JsonElement portElement))
+                    continue;
+
+                string? host = hostElement.ValueKind == JsonValueKind.String ? hostElement.GetString() : null;
+                int port = portElement.ValueKind == JsonValueKind.Number && portElement.TryGetInt32(out int numericPort)
+                    ? numericPort
+                    : int.TryParse(portElement.ToString(), out int parsedPort) ? parsedPort : 0;
+
+                if (string.IsNullOrWhiteSpace(host) || port is < 1 or > 65535)
+                    continue;
+
+                AddSocketTarget(host, port);
+                AddSocketTarget(host, 843);
+                serverCount++;
+            }
+
+            HeadlessConsole.Info($"Loaded {serverCount} AQW servers and prepared {_socketTargets.Count} WebSocket proxy routes.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException)
+        {
+            HeadlessConsole.Warn($"Could not refresh the AQW server list; using bundled socket endpoints. {exception.Message}");
+        }
+
+        if (_socketTargets.Count == 0)
+            throw new InvalidOperationException("No AQW socket proxy endpoints could be prepared.");
+    }
+
+    /// <summary>
+    /// Adds an Artix/AQW socket endpoint to the loopback-only proxy allowlist.
+    /// </summary>
+    /// <param name="host">The socket hostname supplied by the AQW server list.</param>
+    /// <param name="port">The TCP destination port.</param>
+    private void AddSocketTarget(string host, int port)
+    {
+        string normalizedHost = host.Trim().TrimEnd('.').ToLowerInvariant();
+        bool isArtixHost = normalizedHost.EndsWith(".aq.com", StringComparison.Ordinal)
+            || normalizedHost.EndsWith(".artix.com", StringComparison.Ordinal);
+
+        if (!isArtixHost || port is < 1 or > 65535)
+            return;
+
+        _socketTargets.Add(new SocketTarget(normalizedHost, port));
+    }
+
+    /// <summary>
+    /// Handles one Ruffle WebSocket connection and relays its binary frames to the matching AQW TCP socket.
+    /// </summary>
+    /// <param name="context">The local WebSocket request.</param>
+    private async Task HandleSocketProxyAsync(HttpContext context)
+    {
+        string host = context.Request.Query["host"].ToString().Trim().TrimEnd('.').ToLowerInvariant();
+        if (!int.TryParse(context.Request.Query["port"], out int port)
+            || !_socketTargets.Contains(new SocketTarget(host, port)))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        using TcpClient tcpClient = new() { NoDelay = true };
+        try
+        {
+            await tcpClient.ConnectAsync(host, port, context.RequestAborted);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception) when (exception is SocketException or IOException)
+        {
+            HeadlessConsole.Debug($"AQW socket proxy could not connect to {host}:{port}: {exception.Message}");
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return;
+        }
+
+        using WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync();
+        using CancellationTokenSource relayCancellation = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        NetworkStream networkStream = tcpClient.GetStream();
+
+        HeadlessConsole.Debug($"AQW socket tunnel connected: {host}:{port}.");
+
+        Task clientToServer = RelayWebSocketToTcpAsync(webSocket, networkStream, relayCancellation.Token);
+        Task serverToClient = RelayTcpToWebSocketAsync(networkStream, webSocket, relayCancellation.Token);
+
+        await Task.WhenAny(clientToServer, serverToClient);
+        relayCancellation.Cancel();
+        tcpClient.Close();
+
+        await IgnoreRelayFailureAsync(clientToServer);
+        await IgnoreRelayFailureAsync(serverToClient);
+
+        if (webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        {
+            try
+            {
+                await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "TCP connection closed", CancellationToken.None);
+            }
+            catch (WebSocketException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies binary WebSocket payloads to the AQW TCP stream.
+    /// </summary>
+    private static async Task RelayWebSocketToTcpAsync(WebSocket webSocket, NetworkStream networkStream, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[16 * 1024];
+
+        while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open)
+        {
+            WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+            if (result.MessageType == WebSocketMessageType.Close)
+                return;
+
+            await networkStream.WriteAsync(buffer.AsMemory(0, result.Count), cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Copies AQW TCP payloads to binary WebSocket messages.
+    /// </summary>
+    private static async Task RelayTcpToWebSocketAsync(NetworkStream networkStream, WebSocket webSocket, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[16 * 1024];
+
+        while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open)
+        {
+            int bytesRead = await networkStream.ReadAsync(buffer.AsMemory(), cancellationToken);
+            if (bytesRead == 0)
+                return;
+
+            await webSocket.SendAsync(
+                new ArraySegment<byte>(buffer, 0, bytesRead),
+                WebSocketMessageType.Binary,
+                true,
+                cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Suppresses expected cancellation and disconnect exceptions when either side of a socket tunnel closes.
+    /// </summary>
+    private static async Task IgnoreRelayFailureAsync(Task relayTask)
+    {
+        try
+        {
+            await relayTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (WebSocketException)
+        {
+        }
+        catch (SocketException)
+        {
+        }
+    }
+
+    private readonly record struct SocketTarget(string Host, int Port);
 
     /// <summary>
     /// Serves the repository's matching AQW game client locally when the Skua bootstrap requests it.
@@ -208,6 +437,11 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         builder.Logging.ClearProviders();
         _webApplication = builder.Build();
 
+        _webApplication.UseWebSockets(new WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(30)
+        });
+
         FileExtensionContentTypeProvider contentTypes = new();
         contentTypes.Mappings[".wasm"] = "application/wasm";
         contentTypes.Mappings[".swf"] = "application/x-shockwave-flash";
@@ -224,6 +458,25 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         });
 
         _webApplication.MapGet("/health", () => Results.Ok(new { status = "ready" }));
+        _webApplication.MapGet("/socket-proxy-config", (HttpContext context) =>
+        {
+            string scheme = context.Request.IsHttps ? "wss" : "ws";
+            object[] endpoints = _socketTargets
+                .OrderBy(target => target.Host, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(target => target.Port)
+                .Select(target => new
+                {
+                    host = target.Host,
+                    port = target.Port,
+                    proxyUrl = $"{scheme}://{context.Request.Host}/socket-proxy?host={Uri.EscapeDataString(target.Host)}&port={target.Port}"
+                })
+                .Cast<object>()
+                .ToArray();
+
+            return Results.Json(endpoints);
+        });
+        _webApplication.Map("/socket-proxy", branch => branch.Run(HandleSocketProxyAsync));
+
         await _webApplication.StartAsync(cancellationToken);
     }
 
