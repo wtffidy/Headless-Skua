@@ -135,8 +135,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private IResult GetStatus()
     {
         bool loggedIn = _bot.Player.LoggedIn;
-        bool alive = _bot.Player.Alive;
         bool worldLoaded = _bot.Flash.IsWorldLoaded;
+        bool alive = loggedIn && _bot.Player.Alive;
         bool connected = loggedIn && alive && worldLoaded;
         string runtime = !loggedIn
             ? "Not logged in"
