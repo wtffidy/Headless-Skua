@@ -113,6 +113,21 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             null,
             new PageWaitForFunctionOptions { Timeout = 120_000 });
 
+        string graphicsInfo = await _page.EvaluateAsync<string>(
+            "() => JSON.stringify(window.__headlessSkua.getGraphicsInfo())");
+        using (JsonDocument graphicsDocument = JsonDocument.Parse(graphicsInfo))
+        {
+            JsonElement graphics = graphicsDocument.RootElement;
+            string renderer = graphics.TryGetProperty("renderer", out JsonElement rendererElement)
+                ? rendererElement.GetString() ?? "unknown"
+                : "unknown";
+            bool webGpuAvailable = graphics.TryGetProperty("webGpuAvailable", out JsonElement webGpuElement)
+                && webGpuElement.ValueKind == JsonValueKind.True;
+            HeadlessConsole.Info($"Chromium graphics: {renderer}; WebGPU available={webGpuAvailable}.");
+            if (renderer.Contains("SwiftShader", StringComparison.OrdinalIgnoreCase))
+                HeadlessConsole.Warn("Chromium is still using CPU-based SwiftShader rendering. Check the installed GPU driver and Chromium GPU diagnostics.");
+        }
+
         HeadlessConsole.Success("Ruffle reports that the SWF has loaded.");
     }
 
@@ -524,13 +539,20 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
+            // Use full Chromium's new headless mode instead of Playwright's
+            // headless-shell build so Windows can use the installed GPU driver.
+            Channel = "chromium",
             Headless = true,
             // AQW's gameversion endpoint does not send CORS headers for the local
             // Ruffle origin. This browser is isolated from the user's profile and
             // only hosts the bundled Skua runtime, so disable web security here to
             // allow the legacy SWF loader to fetch AQW's game assets.
+            // Enable hardware acceleration when available; keep SwiftShader as a
+            // fallback for CI and systems without a working GPU backend.
             Args = new[]
             {
+                "--enable-gpu",
+                "--use-gl=angle",
                 "--disable-dev-shm-usage",
                 "--disable-web-security",
                 "--enable-unsafe-swiftshader",
