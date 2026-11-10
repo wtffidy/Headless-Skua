@@ -18,7 +18,7 @@ internal static class HeadlessLoginFlow
     /// </summary>
     /// <param name="bot">The initialized Skua script interface.</param>
     /// <param name="cancellationToken">Token used to cancel login.</param>
-    /// <returns>True when the game world is loaded.</returns>
+    /// <returns>True when the character has entered the game world.</returns>
     public static async Task<bool> LoginAsync(IScriptInterface bot, HeadlessSessionState sessionState, CancellationToken cancellationToken)
     {
         (string username, string password) = SelectAccount(bot);
