@@ -60,9 +60,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     /// <summary>
     /// Starts the local static host, Chromium, and the Ruffle player.
     /// </summary>
-    /// <param name="swfPath">Path to the SWF that should be loaded.</param>
+    /// <param name="swfPath">Path to the Skua bootstrap SWF that should be loaded.</param>
+    /// <param name="gameClientFileName">AQW game client filename to serve when the bootstrap requests it.</param>
     /// <param name="cancellationToken">Token used to cancel runtime startup.</param>
-    public async Task StartAsync(string swfPath, CancellationToken cancellationToken)
+    public async Task StartAsync(string swfPath, string gameClientFileName, CancellationToken cancellationToken)
     {
         string indexPath = Path.Combine(_runtimeDirectory, "index.html");
         string rufflePath = Path.Combine(_runtimeDirectory, "ruffle", "ruffle.js");
@@ -78,7 +79,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         await LoadSocketTargetsAsync(cancellationToken);
         await StartStaticHostAsync(cancellationToken);
         await StartBrowserAsync(cancellationToken);
-        await ConfigureLocalGameClientRouteAsync(cancellationToken);
+        await ConfigureLocalGameClientRouteAsync(gameClientFileName, cancellationToken);
 
         string address = GetServerAddress();
         string localSwfPath = Path.Combine(_runtimeDirectory, "game", "skua.swf");
@@ -336,15 +337,16 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     private readonly record struct SocketTarget(string Host, int Port);
 
     /// <summary>
-    /// Serves the repository's matching AQW game client locally when the Skua bootstrap requests it.
+    /// Serves the selected AQW game client locally when the Skua bootstrap requests it.
     /// </summary>
+    /// <param name="gameClientFileName">The selected AQW game client filename.</param>
     /// <param name="cancellationToken">Token used to cancel loading the local game client.</param>
-    private async Task ConfigureLocalGameClientRouteAsync(CancellationToken cancellationToken)
+    private async Task ConfigureLocalGameClientRouteAsync(string gameClientFileName, CancellationToken cancellationToken)
     {
-        string localGameClientPath = Path.Combine(_runtimeDirectory, "game", "Game4000r8.swf");
+        string localGameClientPath = Path.Combine(_runtimeDirectory, "game", gameClientFileName);
         if (!File.Exists(localGameClientPath))
         {
-            HeadlessConsole.Warn("No local Game4000r8.swf was found; AQW will use its online game client.");
+            HeadlessConsole.Warn($"No local {gameClientFileName} was found; AQW will use its online game client.");
             return;
         }
 
@@ -352,7 +354,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         await _page!.RouteAsync("**/gamefiles/**", async route =>
         {
             string requestedFileName = Path.GetFileName(new Uri(route.Request.Url).AbsolutePath);
-            if (!requestedFileName.Equals("Game4000r8.swf", StringComparison.OrdinalIgnoreCase))
+            if (!requestedFileName.Equals(gameClientFileName, StringComparison.OrdinalIgnoreCase))
             {
                 await route.ContinueAsync();
                 return;
@@ -365,10 +367,10 @@ internal sealed class RuffleRuntime : IAsyncDisposable
                 BodyBytes = localGameClient
             });
 
-            HeadlessConsole.Success("Serving the uploaded Game4000r8.swf locally.");
+            HeadlessConsole.Success($"Serving {gameClientFileName} locally.");
         });
 
-        HeadlessConsole.Info("Local AQW game-client override is ready.");
+        HeadlessConsole.Info($"Local AQW game-client override is ready for {gameClientFileName}.");
     }
 
     /// <summary>
