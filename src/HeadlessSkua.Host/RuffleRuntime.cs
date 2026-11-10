@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Skua.Headless.UI;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Playwright;
@@ -71,7 +73,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         Uri playerUri = new(new Uri(address), "?swf=game/skua.swf");
 
-        Console.WriteLine($"Runtime page: {playerUri}");
+        HeadlessConsole.Debug($"Runtime page: {playerUri}");
         await _page!.GotoAsync(playerUri.ToString(), new PageGotoOptions
         {
             WaitUntil = WaitUntilState.Load,
@@ -83,7 +85,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
             null,
             new PageWaitForFunctionOptions { Timeout = 120_000 });
 
-        Console.WriteLine("Ruffle reports that the SWF has loaded.");
+        HeadlessConsole.Success("Ruffle reports that the SWF has loaded.");
     }
 
     /// <summary>
@@ -124,6 +126,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         });
 
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+        builder.Logging.ClearProviders();
         _webApplication = builder.Build();
 
         FileExtensionContentTypeProvider contentTypes = new();
@@ -163,11 +166,20 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         _page.SetDefaultTimeout(30_000);
 
         _page.Console += (_, message) =>
-            Console.WriteLine($"[Browser:{message.Type}] {message.Text}");
+        {
+            LogLevel level = message.Type switch
+            {
+                "error" => LogLevel.Error,
+                "warning" => LogLevel.Warn,
+                "debug" => LogLevel.Debug,
+                _ => LogLevel.Info
+            };
+            HeadlessConsole.Log(level, $"[Browser] {message.Text}");
+        };
         _page.PageError += (_, message) =>
-            Console.Error.WriteLine($"[Browser Error] {message}");
+            HeadlessConsole.Error($"[Browser] {message}");
         _page.RequestFailed += (_, request) =>
-            Console.Error.WriteLine($"[Network Error] {request.Method} {request.Url}: {request.Failure}");
+            HeadlessConsole.Warn($"[Network] {request.Method} {request.Url}: {request.Failure}");
 
         await _page.ExposeBindingAsync<string, JsonElement, object?>(
             "headlessSkuaHostCall",
