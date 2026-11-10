@@ -294,6 +294,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         {
             "skipCutscenes" or "killLag" => "world.myAvatar",
             "magnetize" => "world.myAvatar",
+            "inventoryBagUsedSlots" or "inventoryMiscUsedSlots" or "inventoryHasSpaceFor" => "world.myAvatar.items",
             "infiniteRange" => "world.actions.active",
             "hidePlayers" or "disableFX" => "world.avatars",
             "jumpCorrectRoom" => "world",
