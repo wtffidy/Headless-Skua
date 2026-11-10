@@ -72,6 +72,24 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         }
     }
 
+    /// <summary>
+    /// Queues an ActionScript callback with arguments and returns without waiting for the callback to finish.
+    /// </summary>
+    /// <param name="function">The registered ActionScript callback name.</param>
+    /// <param name="args">Arguments passed to the callback.</param>
+    public void DispatchActionScript(string function, params object[] args)
+    {
+        try
+        {
+            _runtime.DispatchActionScriptAsync(function, args).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"[Ruffle Dispatch] {function}: {exception.GetType().Name}: {exception.Message}");
+            throw;
+        }
+    }
+
     /// <inheritdoc />
     public object? Call(string function, Type type, params object[] args)
     {
