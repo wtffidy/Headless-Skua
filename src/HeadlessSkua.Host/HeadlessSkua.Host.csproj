@@ -3,6 +3,10 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>HeadlessSkua</AssemblyName>
     <RootNamespace>HeadlessSkua</RootNamespace>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
