@@ -96,7 +96,8 @@ var game:* = Main.instance.getGame();
                 if (isGameReady(game)) {
                     module.onToggle(game);
                 }
-'@.Trim()
+'@
+    $moduleToggleReplacement = $moduleToggleReplacement.Trim()
     $patchedModules = [regex]::Replace(
         $modulesContent,
         $moduleTogglePattern,
@@ -139,18 +140,18 @@ var game:* = Main.instance.getGame();
     }
 
     $worldContentBeforePatch = $worldContent
-    $worldContent = $worldContent.Replace(
-        @'
+
+    $skipCutscenesBefore = @'
     public static function skipCutscenes():void {
         while (Main.instance.game.mcExtSWF.numChildren > 0) {
-'@,
-        @'
+'@
+    $skipCutscenesAfter = @'
     public static function skipCutscenes():void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         if (game == null || game.mcExtSWF == null) return;
         while (game.mcExtSWF.numChildren > 0) {
 '@
-    )
+    $worldContent = $worldContent.Replace($skipCutscenesBefore, $skipCutscenesAfter)
     $worldContent = $worldContent.Replace(
         '        Main.instance.game.mcExtSWF.removeChildAt(0);',
         '        game.mcExtSWF.removeChildAt(0);'
@@ -159,62 +160,61 @@ var game:* = Main.instance.getGame();
         '        Main.instance.game.showInterface();',
         '        game.showInterface();'
     )
-    $worldContent = $worldContent.Replace(
-        @'
+
+    $hidePlayersBefore = @'
     public static function hidePlayers(enabled:Boolean):void {
         var world:* = Main.instance.game.world;
-'@,
-        @'
+'@
+    $hidePlayersAfter = @'
     public static function hidePlayers(enabled:Boolean):void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         var world:* = game != null ? game.world : null;
         if (world == null || world.avatars == null) return;
 '@
-    )
-    $worldContent = $worldContent.Replace(
-        @'
+    $worldContent = $worldContent.Replace($hidePlayersBefore, $hidePlayersAfter)
+
+    $disableFxBefore = @'
     public static function disableFX(enabled:Boolean):void {
         if (!_fxLastOpt && enabled) {
-'@,
-        @'
+'@
+    $disableFxAfter = @'
     public static function disableFX(enabled:Boolean):void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         var world:* = game != null ? game.world : null;
         if (world == null || world.avatars == null) return;
         if (!_fxLastOpt && enabled) {
 '@
-    )
+    $worldContent = $worldContent.Replace($disableFxBefore, $disableFxAfter)
     $worldContent = $worldContent.Replace(
         'for each (var avatar:* in Main.instance.game.world.avatars)',
         'for each (var avatar:* in world.avatars)'
     )
-    $worldContent = $worldContent.Replace(
-        @'
+
+    $killLagBefore = @'
     public static function killLag(enable:Boolean):void {
         Main.instance.game.world.visible = !enable;
-'@,
-        @'
+'@
+    $killLagAfter = @'
     public static function killLag(enable:Boolean):void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         if (game == null || game.world == null) return;
         game.world.visible = !enable;
 '@
-    )
+    $worldContent = $worldContent.Replace($killLagBefore, $killLagAfter)
 
     $combatContentBeforePatch = $combatContent
-    $combatContent = $combatContent.Replace(
-        @'
+    $magnetizeBefore = @'
     public static function magnetize():void {
         var target:* = Main.instance.game.world.myAvatar.target;
-'@,
-        @'
+'@
+    $magnetizeAfter = @'
     public static function magnetize():void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         var world:* = game != null ? game.world : null;
         if (world == null || world.myAvatar == null) return;
         var target:* = world.myAvatar.target;
 '@
-    )
+    $combatContent = $combatContent.Replace($magnetizeBefore, $magnetizeAfter)
     $combatContent = $combatContent.Replace(
         '            target.pMC.x = Main.instance.game.world.myAvatar.pMC.x;',
         '            target.pMC.x = world.myAvatar.pMC.x;'
@@ -223,14 +223,14 @@ var game:* = Main.instance.getGame();
         '            target.pMC.y = Main.instance.game.world.myAvatar.pMC.y;',
         '            target.pMC.y = world.myAvatar.pMC.y;'
     )
-    $combatContent = $combatContent.Replace(
-        @'
+
+    $infiniteRangeBefore = @'
     public static function infiniteRange():void {
         var active:Array = Main.instance.game.world.actions.active;
         for (var i:int = 0; i < 6; i++) {
             active[i].range = 20000;
-'@,
-        @'
+'@
+    $infiniteRangeAfter = @'
     public static function infiniteRange():void {
         var game:* = Main.instance != null ? Main.instance.game : null;
         var world:* = game != null ? game.world : null;
@@ -239,7 +239,7 @@ var game:* = Main.instance.getGame();
         for (var i:int = 0; i < Math.min(6, active.length); i++) {
             if (active[i] != null) active[i].range = 20000;
 '@
-    )
+    $combatContent = $combatContent.Replace($infiniteRangeBefore, $infiniteRangeAfter)
 
     if ([string]::Equals($worldContentBeforePatch, $worldContent, [StringComparison]::Ordinal)
         -or [string]::Equals($combatContentBeforePatch, $combatContent, [StringComparison]::Ordinal)) {
