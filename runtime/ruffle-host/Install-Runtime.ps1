@@ -35,11 +35,14 @@ if ($Version -ieq "nightly") {
     }
 
     $nightlyAsset = $nightlyRelease.assets |
-        Where-Object { $_.name -match '^ruffle-nightly_\d{4}_\d{2}_\d{2}-web-selfhosted\.zip$' } |
+        Where-Object { $_.name -match '^ruffle-nightly-\d{4}_\d{2}_\d{2}-web-selfhosted\.zip$' } |
         Select-Object -First 1
 
     if ($null -eq $nightlyAsset) {
-        throw "Ruffle release $($nightlyRelease.tag_name) does not contain the web self-hosted package."
+        $availableWebAssets = ($nightlyRelease.assets |
+            Where-Object { $_.name -like "*web-selfhosted*" } |
+            ForEach-Object { $_.name }) -join ", "
+        throw "Ruffle release $($nightlyRelease.tag_name) does not contain the expected web package. Available web assets: $availableWebAssets"
     }
 
     $resolvedVersion = $nightlyRelease.tag_name
@@ -48,7 +51,7 @@ if ($Version -ieq "nightly") {
 }
 elseif ($Version -match '^nightly-(\d{4})-(\d{2})-(\d{2})$') {
     $dateToken = "$($Matches[1])_$($Matches[2])_$($Matches[3])"
-    $archiveName = "ruffle-nightly_$dateToken-web-selfhosted.zip"
+    $archiveName = "ruffle-nightly-$dateToken-web-selfhosted.zip"
     $downloadUrl = "https://github.com/ruffle-rs/ruffle/releases/download/$Version/$archiveName"
 }
 elseif ($Version -match '^\d+\.\d+\.\d+$') {
