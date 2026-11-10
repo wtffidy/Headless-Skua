@@ -148,26 +148,29 @@ if /I "%~1"=="run" goto :launch
 goto :default_launch
 
 :default_launch
-pushd "%OUTPUT_DIR%"
-HeadlessSkua.exe run
-set "EXIT_CODE=%errorlevel%"
-popd
-exit /b %EXIT_CODE%
+start "Headless Skua" /D "%OUTPUT_DIR%" "%OUTPUT_DIR%\HeadlessSkua.exe" run %*
+if errorlevel 1 goto :launch_failed
+echo Headless Skua opened in a separate console window.
+exit /b 0
 
 :launch
 shift
-pushd "%OUTPUT_DIR%"
-HeadlessSkua.exe run %*
-set "EXIT_CODE=%errorlevel%"
-popd
-exit /b %EXIT_CODE%
+start "Headless Skua" /D "%OUTPUT_DIR%" "%OUTPUT_DIR%\HeadlessSkua.exe" run %*
+if errorlevel 1 goto :launch_failed
+echo Headless Skua opened in a separate console window.
+exit /b 0
 
 :butler
-pushd "%OUTPUT_DIR%"
-HeadlessSkua.exe %*
-set "EXIT_CODE=%errorlevel%"
-popd
-exit /b %EXIT_CODE%
+start "Headless Skua" /D "%OUTPUT_DIR%" "%OUTPUT_DIR%\HeadlessSkua.exe" %*
+if errorlevel 1 goto :launch_failed
+echo Headless Skua opened in a separate console window.
+exit /b 0
+
+:launch_failed
+echo.
+echo [ERROR] Could not start Headless Skua in a separate console.
+echo.
+exit /b 1
 
 :failed
 echo.
