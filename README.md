@@ -14,7 +14,7 @@ On Windows, run:
 Build.bat
 ```
 
-The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. The output folder contains the executable plus the external Ruffle/game assets and bundled plugins:
+The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. Playwright's Node driver, the dashboard files, Ruffle, and the AQW client remain alongside the executable as runtime assets:
 
 ```
 Build\
@@ -23,6 +23,12 @@ Build\
 │   └── ButlerV5.dll
 ├── panel\
 │   └── index.html
+├── .playwright\
+│   ├── node\
+│   │   └── win32_x64\
+│   │       └── node.exe
+│   └── package\
+│       └── cli.js
 └── runtime\
     └── ruffle-host\
         ├── index.html
