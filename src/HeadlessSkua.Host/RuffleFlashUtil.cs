@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Dynamic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -96,10 +97,16 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     /// <inheritdoc />
     public object? Call(string function, Type type, params object[] args)
     {
+        string? outboundOperation = DescribeOutboundMapOperation(function, args);
+        Stopwatch? outboundTimer = outboundOperation is null ? null : Stopwatch.StartNew();
+
         try
         {
             if (ShouldDeferModuleCall(function, args) || ShouldSkipUnavailableGameCall(function) || ShouldSkipNullTarget(function, args))
                 return type.IsValueType ? Activator.CreateInstance(type) : null;
+
+            if (outboundOperation is not null)
+                HeadlessConsole.Debug($"AQW {outboundOperation} entered the ActionScript bridge.");
 
             string? cacheKey = GetReadCallCacheKey(function, type, args, out long cacheDurationMilliseconds);
             long now = Environment.TickCount64;
@@ -113,14 +120,66 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             if (cacheKey is not null)
                 _readCallCache[cacheKey] = new CachedCall(Environment.TickCount64 + cacheDurationMilliseconds, converted);
 
+            if (outboundOperation is not null)
+                HeadlessConsole.Info($"AQW {outboundOperation} returned from ActionScript in {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms.");
+
             FlushDeferredModuleCalls();
             return converted;
         }
         catch (Exception exception)
         {
+            if (outboundOperation is not null)
+                HeadlessConsole.Error($"AQW {outboundOperation} bridge call failed after {outboundTimer?.Elapsed.TotalMilliseconds:F0}ms: {exception.Message}");
+
             Console.Error.WriteLine($"[Ruffle Call] {function}: {exception.GetType().Name}: {exception.Message}");
             return type.IsValueType ? Activator.CreateInstance(type) : null;
         }
+    }
+
+    /// <summary>
+    /// Describes only map-changing packets sent through the Skua-to-ActionScript bridge.
+    /// Packet payloads, player names, room identifiers, and credentials are never logged.
+    /// </summary>
+    /// <param name="function">The ActionScript bridge callback name.</param>
+    /// <param name="args">Arguments passed to the callback.</param>
+    /// <returns>A safe operation description, or null for unrelated calls.</returns>
+    private static string? DescribeOutboundMapOperation(string function, object[] args)
+    {
+        if (function == "callGameFunction"
+            && args.Length >= 2
+            && string.Equals(args[0] as string, "sfc.sendString", StringComparison.Ordinal)
+            && args[1] is string packet)
+        {
+            string[] fields = packet.Split('%');
+            if (fields.Length > 3
+                && string.Equals(fields[1], "xt", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(fields[2], "zm", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(fields[3], "house", StringComparison.OrdinalIgnoreCase))
+                    return "house transfer request";
+
+                if (fields.Length > 7
+                    && string.Equals(fields[3], "cmd", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(fields[5], "tfer", StringComparison.OrdinalIgnoreCase))
+                {
+                    string map = fields[7];
+                    int suffix = map.LastIndexOf('-');
+                    if (suffix > 0 && int.TryParse(map[(suffix + 1)..], out _))
+                        map = map[..suffix];
+
+                    return $"map transfer to {map}";
+                }
+            }
+        }
+
+        if (function == "sendClientPacket"
+            && args.Length >= 2
+            && args[0] is string clientPacket
+            && string.Equals(args[1] as string, "json", StringComparison.OrdinalIgnoreCase)
+            && clientPacket.Contains("\"cmd\":\"moveToArea\"", StringComparison.OrdinalIgnoreCase))
+            return "client map-entry packet";
+
+        return null;
     }
 
     /// <summary>
