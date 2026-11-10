@@ -20,6 +20,8 @@ appsettings.Local.json
 .env.*
 
 # Runtime downloads and game data
+/runtime/ruffle-host/ruffle/
+/runtime/ruffle-host/game/
 .runtime/
 runtime-cache/
 game-data/
