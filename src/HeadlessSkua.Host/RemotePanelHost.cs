@@ -115,8 +115,9 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         MapApi(_application);
         await _application.StartAsync(cancellationToken);
 
-        _statusMonitorCancellation = new CancellationTokenSource();
-        _statusMonitorTask = Task.Run(() => RefreshStatusLoopAsync(_statusMonitorCancellation.Token));
+        CancellationTokenSource statusMonitorCancellation = new();
+        _statusMonitorCancellation = statusMonitorCancellation;
+        _statusMonitorTask = Task.Run(() => RefreshStatusLoopAsync(statusMonitorCancellation.Token));
 
         HeadlessConsole.Success($"Remote panel listening on port {_port}.");
         HeadlessConsole.Panel("Remote Panel",
