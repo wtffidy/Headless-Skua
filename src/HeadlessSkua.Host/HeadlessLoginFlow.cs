@@ -425,18 +425,7 @@ internal static class HeadlessLoginFlow
                 !string.IsNullOrWhiteSpace(server.Name) && !string.IsNullOrWhiteSpace(server.IP));
 
             if (hasServerData)
-            {
-                try
-                {
-                    bot.Flash.Call("loadPolicyFiles");
-                }
-                catch (Exception exception)
-                {
-                    HeadlessConsole.Debug($"Policy file preload was unavailable: {exception.Message}");
-                }
-
                 return true;
-            }
 
             if (DateTime.UtcNow >= nextDiagnostic)
             {
