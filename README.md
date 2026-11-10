@@ -4,14 +4,14 @@
 
 Headless Skua is a separate .NET 10 host for Skua. It is intended to run without an interactive desktop, window, or visible game client while retaining compatibility with existing Skua scripts and CoreBots wherever the underlying runtime permits.
 
-> **Status: Early architecture and runtime-prototype phase.** The repository is being established now. Game login, the Ruffle bridge, and script execution are not implemented yet.
+> **Status: Early runtime prototype.** The headless Chromium/Ruffle host and initial Skua script integration are in place. Full game login, network compatibility, and broad CoreBots validation remain in progress.
 
 ## Goals
 
 - Run the AQW game client in a genuinely headless runtime.
 - Preserve the existing Skua scripting API and CoreBots compatibility.
 - Replace the Windows-only ActiveX/COM Flash host with a runtime-neutral implementation.
-- Keep the host independent of Avalonia and desktop UI assemblies.
+- Keep desktop UI out of the runtime while allowing plugins to provide headless-compatible behaviour.
 - Start with one reliable account session, then add isolated multi-account sessions.
 - Provide a CLI, structured logs, graceful shutdown, and automation-friendly control.
 
@@ -46,36 +46,44 @@ Headless-Skua/
 
 ## Build
 
-Clone with the pinned VibeSkua source submodule:
+Windows users can use the all-in-one build script. It initializes the VibeSkua submodule, restores and builds the solution, installs headless Chromium and Ruffle, copies the Skua SWF, and runs the prerequisite check.
 
-```powershell
-git clone --recurse-submodules https://github.com/wtffidy/Headless-Skua.git
-cd Headless-Skua
-dotnet build HeadlessSkua.sln
+```bat
+Build.bat
 ```
 
-If the repository was cloned without submodules, initialize them with `git submodule update --init --recursive`.
+To build and immediately start the headless client:
 
-Install the headless browser and Ruffle assets:
-
-```powershell
-pwsh src/HeadlessSkua.Host/bin/Debug/net10.0/playwright.ps1 install chromium
-pwsh runtime/ruffle-host/Install-Runtime.ps1
+```bat
+Build.bat run
 ```
 
-Start the runtime:
+To build, prepare the runtime, and execute an existing Skua C# script:
 
-```powershell
-dotnet run --project src/HeadlessSkua.Host -- run
+```bat
+Build.bat run --script "C:\\path\\to\\YourScript.cs"
 ```
 
-Run an existing Skua C# script after the client initializes:
+### Plugins and ButlerV5
 
-```powershell
-dotnet run --project src/HeadlessSkua.Host -- run --script "C:\\path\\to\\YourScript.cs"
-```
+Headless Skua initializes Skua's plugin manager and discovers plugin assemblies from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) as well as the host's local plugins folder. Plugins that rely on interactive desktop windows cannot show those windows in headless mode; their non-UI functionality can still run when their dependencies support the headless host.
 
-Headless mode uses saved script options and defaults when an interactive dialog would otherwise be required. Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites.
+ButlerV5 is bundled as a plugin and can be controlled from the command line:
+
+\`\`\`bat
+Build.bat -butler PlayerName
+Build.bat -butler PlayerName 30m
+Build.bat -butler PlayerName 02:00:00
+Build.bat -butler stop
+\`\`\`
+
+An omitted duration means the follow runs indefinitely. Durations accept s, m, h, d, or HH:MM:SS. The stop command sends a local named-pipe request to the active Butler session. ButlerV5 continues to use its existing shared sync files, so other ButlerV5-enabled clients can see and summon this account as usual.
+
+Requirements: Git and the .NET 10 SDK. The script uses PowerShell (or PowerShell 7 if installed) for runtime setup. Run `Build.bat` again after pulling updates to rebuild and refresh the runtime.
+
+For manual setup, initialize the submodule with `git submodule update --init --recursive`, then use `dotnet build HeadlessSkua.sln --configuration Release` and the Playwright/Ruffle setup scripts under `runtime/ruffle-host`.
+
+Use `dotnet run --project src/HeadlessSkua.Host -- doctor` to inspect local prerequisites without rebuilding.
 
 ## Current milestones
 
