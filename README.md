@@ -79,7 +79,7 @@ If VibeSkua Manager accounts are available, choose one from the numbered list. O
 Headless Skua serves a browser control panel on port **8788**. It is enabled by default and listens on localhost only:
 
 ```bat
-Build\\HeadlessSkua.exe run
+Build\HeadlessSkua.exe run
 ```
 
 Open [http://127.0.0.1:8788](http://127.0.0.1:8788) on the host computer.
@@ -87,7 +87,7 @@ Open [http://127.0.0.1:8788](http://127.0.0.1:8788) on the host computer.
 To make the panel available to other devices on your home network or VPN, bind it to all interfaces:
 
 ```bat
-Build\\HeadlessSkua.exe run --remote
+Build\HeadlessSkua.exe run --remote
 ```
 
 Or pass the option through the build script:
