@@ -86,6 +86,13 @@ echo [6/8] Installing Ruffle and the Skua game client...
 if errorlevel 1 goto :failed
 
 echo.
+echo Copying runtime assets into the Visual Studio build output...
+set "DEV_OUTPUT_DIR=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0"
+if exist "%DEV_OUTPUT_DIR%\runtime\ruffle-host" rmdir /s /q "%DEV_OUTPUT_DIR%\runtime\ruffle-host"
+xcopy "runtime\ruffle-host" "%DEV_OUTPUT_DIR%\runtime\ruffle-host\\" /E /I /Y >nul
+if errorlevel 1 goto :failed
+
+echo.
 echo [7/8] Publishing standalone Windows build...
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
 dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=embedded -o "%OUTPUT_DIR%"
