@@ -187,8 +187,11 @@ internal static class HeadlessLoginFlow
         {
             string? modalMessage = GetActiveModalMessage(bot);
             string connectionDetail = GetConnectionDetail(bot);
-            HeadlessConsole.Error($"The connection to {selectedServer.Name} did not reach a loaded game world.");
-            HeadlessConsole.Error($"Connection state: Playing={bot.Player.Playing}, PlayerLoaded={bot.Player.Loaded}, WorldLoaded={bot.Flash.IsWorldLoaded}.");
+            HeadlessConsole.Error($"The connection to {selectedServer.Name} did not reach a fully loaded player.");
+            bool worldReadyForDiagnostics = bot.Flash.IsWorldLoaded;
+            bool avatarReadyForDiagnostics = worldReadyForDiagnostics && !bot.Flash.IsNull("world.myAvatar");
+            bool playerReadyForDiagnostics = avatarReadyForDiagnostics && bot.Player.Loaded;
+            HeadlessConsole.Error($"Connection state: Playing={bot.Player.Playing}, PlayerLoaded={playerReadyForDiagnostics}, WorldLoaded={worldReadyForDiagnostics}.");
             if (!string.IsNullOrWhiteSpace(modalMessage))
                 HeadlessConsole.Error($"Game message: {modalMessage}");
             if (!string.IsNullOrWhiteSpace(connectionDetail) && !string.Equals(connectionDetail, "null", StringComparison.OrdinalIgnoreCase))
