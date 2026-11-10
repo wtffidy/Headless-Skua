@@ -35,6 +35,33 @@ internal static class Program
             return 0;
         }
 
+        if (string.Equals(args[0], "-butler", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: HeadlessSkua -butler <username> [duration] | -butler stop");
+                return 1;
+            }
+
+            if (string.Equals(args[1], "stop", StringComparison.OrdinalIgnoreCase))
+                return await HeadlessButlerCommand.StopAsync();
+
+            if (args.Length > 3)
+            {
+                Console.Error.WriteLine("Usage: HeadlessSkua -butler <username> [duration]");
+                return 1;
+            }
+
+            List<string> butlerArguments = new() { "run", "--butler", args[1] };
+            if (args.Length == 3)
+            {
+                butlerArguments.Add("--duration");
+                butlerArguments.Add(args[2]);
+            }
+
+            return await RunAsync(butlerArguments.ToArray());
+        }
+
         if (args.Contains("run", StringComparer.OrdinalIgnoreCase))
             return await RunAsync(args);
 
@@ -86,6 +113,10 @@ internal static class Program
 
             await using ServiceProvider serviceProvider = services.BuildServiceProvider();
             Ioc.Default.ConfigureServices(serviceProvider);
+            Skua.Core.Models.ClientFileSources.EnsureInitialized();
+
+            IPluginManager pluginManager = serviceProvider.GetRequiredService<IPluginManager>();
+            pluginManager.Initialize();
 
             ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
             settings.SetApplicationVersion();
@@ -94,6 +125,10 @@ internal static class Program
             // rather than halfway through an unattended script.
             serviceProvider.GetRequiredService<IScriptInterface>();
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+
+            string? butlerTarget = GetOption(args, "--butler");
+            if (!string.IsNullOrWhiteSpace(butlerTarget))
+                return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
 
             string? scriptPath = GetOption(args, "--script");
             if (!string.IsNullOrWhiteSpace(scriptPath))
@@ -186,6 +221,9 @@ internal static class Program
             Commands:
               doctor             Check local runtime prerequisites.
               run                Start the headless game runtime.
+              -butler <user> [duration]
+                                 Follow a player with ButlerV5; no duration means run until stopped.
+              -butler stop        Stop the active headless ButlerV5 session.
 
             Run options:
               --swf <path>       Path to the Skua SWF (defaults to runtime game/skua.swf).
