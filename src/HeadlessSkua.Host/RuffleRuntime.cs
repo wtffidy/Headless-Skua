@@ -72,7 +72,7 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         Console.WriteLine($"Runtime page: {playerUri}");
         await _page!.GotoAsync(playerUri.ToString(), new PageGotoOptions
         {
-            WaitUntil = WaitUntil.Load,
+            WaitUntil = WaitUntilState.Load,
             Timeout = 60_000
         });
 
