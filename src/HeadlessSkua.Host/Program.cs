@@ -230,6 +230,9 @@ internal static class Program
                 serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
                 HeadlessConsole.Success($"Skua game-state services initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
+                HeadlessLogService headlessLogs = serviceProvider.GetRequiredService<HeadlessLogService>();
+                flash.DiagnosticLogged += headlessLogs.DebugLog;
+
                 IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
 
                 await using RemotePanelHost? remotePanel = args.Contains("--no-panel", StringComparer.OrdinalIgnoreCase)
@@ -239,7 +242,7 @@ internal static class Program
                         scriptManager,
                         pluginManager,
                         sessionState,
-                        serviceProvider.GetRequiredService<HeadlessLogService>(),
+                        headlessLogs,
                         args.Contains("--remote", StringComparer.OrdinalIgnoreCase),
                         GetPanelPort(args));
 
