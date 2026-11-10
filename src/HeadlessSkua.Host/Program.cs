@@ -21,7 +21,12 @@ internal static class Program
         HeadlessConsole.Init(args);
         HeadlessConsole.Banner(Version);
 
-        if (args.Length == 0 || args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
+        // Double-clicking the published executable should start the normal headless session.
+        // Help remains available when explicitly requested from a terminal.
+        if (args.Length == 0)
+            return await RunAsync(new[] { "run" });
+
+        if (args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
         {
             PrintHelp();
             return 0;
