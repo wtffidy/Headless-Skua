@@ -33,3 +33,4 @@ logs/
 *.log
 *.trace
 *.dmp
+/Build/
