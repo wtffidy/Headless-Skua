@@ -169,90 +169,91 @@ internal static class Program
             ServiceProvider serviceProvider = services.BuildServiceProvider();
             try
             {
-            Ioc.Default.ConfigureServices(serviceProvider);
-            Skua.Core.Models.ClientFileSources.EnsureInitialized();
-
-            IPluginManager pluginManager = serviceProvider.GetRequiredService<IPluginManager>();
-            pluginManager.Initialize();
-
-            ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
-            settings.SetApplicationVersion();
-
-            // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
-            // rather than halfway through an unattended script.
-            IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
-            serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
-            HeadlessConsole.Success("Skua game-state services initialized.");
-
-            IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
-
-            await using RemotePanelHost? remotePanel = args.Contains("--no-panel", StringComparer.OrdinalIgnoreCase)
-                ? null
-                : new RemotePanelHost(
-                    scriptInterface,
-                    scriptManager,
-                    pluginManager,
-                    serviceProvider.GetRequiredService<HeadlessLogService>(),
-                    args.Contains("--remote", StringComparer.OrdinalIgnoreCase),
-                    GetPanelPort(args));
-
-            if (remotePanel is not null)
-                await remotePanel.StartAsync(cancellationTokenSource.Token);
-
-            if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
-                && !await HeadlessLoginFlow.LoginAsync(scriptInterface, cancellationTokenSource.Token))
-                return 4;
-
-            string? butlerTarget = GetOption(args, "--butler");
-            if (!string.IsNullOrWhiteSpace(butlerTarget))
-                return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
-
-            string? scriptPath = GetOption(args, "--script");
-            if (!string.IsNullOrWhiteSpace(scriptPath))
-            {
-                string fullScriptPath = Path.GetFullPath(scriptPath);
-                if (!File.Exists(fullScriptPath))
-                    throw new FileNotFoundException("The requested Skua script was not found.", fullScriptPath);
-
-                HeadlessConsole.Info($"Starting script: {fullScriptPath}");
-                scriptManager.SetLoadedScript(fullScriptPath);
-
-                scriptManager.SilentConfig = true;
-                Trace.Listeners.Add(new ConsoleTraceListener());
-                Trace.AutoFlush = true;
-
-                Exception? scriptException = await scriptManager.StartScript();
-
-                if (scriptException is not null)
+                Ioc.Default.ConfigureServices(serviceProvider);
+                _ = typeof(System.Windows.Forms.HeadlessCompatibilityMarker).Assembly;
+                Skua.Core.Models.ClientFileSources.EnsureInitialized();
+    
+                IPluginManager pluginManager = serviceProvider.GetRequiredService<IPluginManager>();
+                pluginManager.Initialize();
+    
+                ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
+                settings.SetApplicationVersion();
+    
+                // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
+                // rather than halfway through an unattended script.
+                IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
+                serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
+                HeadlessConsole.Success("Skua game-state services initialized.");
+    
+                IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+    
+                await using RemotePanelHost? remotePanel = args.Contains("--no-panel", StringComparer.OrdinalIgnoreCase)
+                    ? null
+                    : new RemotePanelHost(
+                        scriptInterface,
+                        scriptManager,
+                        pluginManager,
+                        serviceProvider.GetRequiredService<HeadlessLogService>(),
+                        args.Contains("--remote", StringComparer.OrdinalIgnoreCase),
+                        GetPanelPort(args));
+    
+                if (remotePanel is not null)
+                    await remotePanel.StartAsync(cancellationTokenSource.Token);
+    
+                if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
+                    && !await HeadlessLoginFlow.LoginAsync(scriptInterface, cancellationTokenSource.Token))
+                    return 4;
+    
+                string? butlerTarget = GetOption(args, "--butler");
+                if (!string.IsNullOrWhiteSpace(butlerTarget))
+                    return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
+    
+                string? scriptPath = GetOption(args, "--script");
+                if (!string.IsNullOrWhiteSpace(scriptPath))
                 {
-                    Console.Error.WriteLine($"Script failed to start: {scriptException}");
-                    return 3;
-                }
-
-                while (scriptManager.ScriptRunning)
-                {
-                    if (cancellationTokenSource.IsCancellationRequested)
+                    string fullScriptPath = Path.GetFullPath(scriptPath);
+                    if (!File.Exists(fullScriptPath))
+                        throw new FileNotFoundException("The requested Skua script was not found.", fullScriptPath);
+    
+                    HeadlessConsole.Info($"Starting script: {fullScriptPath}");
+                    scriptManager.SetLoadedScript(fullScriptPath);
+    
+                    scriptManager.SilentConfig = true;
+                    Trace.Listeners.Add(new ConsoleTraceListener());
+                    Trace.AutoFlush = true;
+    
+                    Exception? scriptException = await scriptManager.StartScript();
+    
+                    if (scriptException is not null)
                     {
-                        try
-                        {
-                            scriptManager.ScriptCts?.Cancel();
-                        }
-                        catch (ObjectDisposedException)
-                        {
-                        }
+                        Console.Error.WriteLine($"Script failed to start: {scriptException}");
+                        return 3;
                     }
-
-                    await Task.Delay(250);
+    
+                    while (scriptManager.ScriptRunning)
+                    {
+                        if (cancellationTokenSource.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                scriptManager.ScriptCts?.Cancel();
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                            }
+                        }
+    
+                        await Task.Delay(250);
+                    }
+    
+                    Console.WriteLine("Script execution stopped.");
+                    return 0;
                 }
-
-                Console.WriteLine("Script execution stopped.");
+    
+                HeadlessConsole.Success("Headless game runtime ready. Press Ctrl+C to stop.");
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
                 return 0;
-            }
-
-            HeadlessConsole.Success("Headless game runtime ready. Press Ctrl+C to stop.");
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
-            return 0;
-            }
+                }
             finally
             {
                 try
