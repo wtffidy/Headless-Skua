@@ -50,7 +50,7 @@ jobs:
         run: |
           $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.out.log"
           $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.err.log"
-          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run")
+          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run", "--script", "tests/Smoke/HeadlessSmoke.cs")
           $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           try {
@@ -60,7 +60,7 @@ jobs:
             while ([DateTime]::UtcNow -lt $deadline) {
               if (Test-Path $stdout) {
                 $output = Get-Content $stdout -Raw
-                if ($output -match "Skua ActionScript client initialized") {
+                if ($output -match "Headless Skua script engine smoke test passed." -and $output -match "Script execution stopped.") {
                   $started = $true
                   break
                 }
@@ -76,7 +76,7 @@ jobs:
             if (-not $started) {
               if (Test-Path $stdout) { Get-Content $stdout }
               if (Test-Path $stderr) { Get-Content $stderr }
-              throw "The Skua SWF did not initialize in headless Chromium within 90 seconds."
+              throw "The Skua SWF or existing Skua script engine did not initialize in headless Chromium within 90 seconds."
             }
           }
           finally {
