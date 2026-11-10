@@ -160,8 +160,7 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     {
         string? requiredPath = function switch
         {
-            "skipCutscenes" => "mcExtSWF",
-            "killLag" => "world",
+            "skipCutscenes" or "killLag" => "world.myAvatar",
             "magnetize" => "world.myAvatar",
             "infiniteRange" => "world.actions.active",
             "hidePlayers" or "disableFX" => "world.avatars",
