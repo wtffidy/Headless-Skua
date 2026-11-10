@@ -188,7 +188,7 @@ internal static class HeadlessLoginFlow
             string? modalMessage = GetActiveModalMessage(bot);
             string connectionDetail = GetConnectionDetail(bot);
             HeadlessConsole.Error($"The connection to {selectedServer.Name} did not reach a loaded game world.");
-            HeadlessConsole.Error($"Connection state: Playing={bot.Player.Playing}, WorldLoaded={bot.Flash.IsWorldLoaded}.");
+            HeadlessConsole.Error($"Connection state: Playing={bot.Player.Playing}, PlayerLoaded={bot.Player.Loaded}, WorldLoaded={bot.Flash.IsWorldLoaded}.");
             if (!string.IsNullOrWhiteSpace(modalMessage))
                 HeadlessConsole.Error($"Game message: {modalMessage}");
             if (!string.IsNullOrWhiteSpace(connectionDetail) && !string.Equals(connectionDetail, "null", StringComparison.OrdinalIgnoreCase))
@@ -254,7 +254,8 @@ internal static class HeadlessLoginFlow
                 bool worldLoaded = bot.Flash.IsWorldLoaded;
                 HeadlessConsole.Debug($"AQW initialization probe: world={worldLoaded}; checking avatar...");
                 bool avatarLoaded = worldLoaded && !bot.Flash.IsNull("world.myAvatar");
-                HeadlessConsole.Debug($"AQW initialization: objLogin={loginDataLoaded}, objServerInfo={serverDataLoaded}, world={worldLoaded}, avatar={avatarLoaded}.");
+                bool playerLoaded = avatarLoaded && bot.Player.Loaded;
+                HeadlessConsole.Debug($"AQW initialization: objLogin={loginDataLoaded}, objServerInfo={serverDataLoaded}, world={worldLoaded}, avatar={avatarLoaded}, playerLoaded={playerLoaded}.");
                 nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
             }
 
@@ -267,16 +268,17 @@ internal static class HeadlessLoginFlow
             }
 
             bool worldReady = bot.Flash.IsWorldLoaded;
-            if (worldReady && !bot.Flash.IsNull("world.myAvatar") && bot.Player.Playing)
+            bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
+            if (avatarReady && bot.Player.Playing && bot.Player.Loaded)
                 return true;
 
             await Task.Delay(250, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return bot.Flash.IsWorldLoaded
-            && !bot.Flash.IsNull("world.myAvatar")
-            && bot.Player.Playing;
+        bool worldReady = bot.Flash.IsWorldLoaded;
+        bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
+        return avatarReady && bot.Player.Playing && bot.Player.Loaded;
     }
 
     /// <summary>
