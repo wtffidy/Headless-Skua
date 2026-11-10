@@ -153,6 +153,11 @@ internal static class Program
                     {
                         try
                         {
+                            // The Skua bootstrap defaults to hideme.swf, which AQW no longer serves.
+                            // Set a valid built-in title background before loadClient copies sBG into game.params.
+                            flash.Call("setBackgroundValues", "Generic2.swf", string.Empty);
+                            HeadlessConsole.Info("Using Generic2.swf for the AQW title background.");
+
                             HeadlessConsole.Debug("Queuing the SWF loadClient callback...");
                             flash.Dispatch("loadClient");
                             HeadlessConsole.Success("AQW game-load callback queued in Ruffle.");
