@@ -14,6 +14,32 @@ internal static class HeadlessButlerCommand
     private const string PluginName = "ButlerV5 Avalonia";
 
     /// <summary>
+    /// Checks whether ButlerV5 is loaded, enabled, and able to begin following.
+    /// </summary>
+    /// <param name="pluginManager">The initialized Skua plugin manager.</param>
+    /// <returns>A user-facing reason when Butler cannot start, otherwise null.</returns>
+    public static string? GetStartBlockReason(IPluginManager pluginManager)
+    {
+        IPluginContainer? container = pluginManager.GetContainer(PluginName);
+        ISkuaPlugin? plugin = container?.Plugin;
+        if (plugin is null)
+            return $"The {PluginName} plugin is not loaded.";
+
+        Type pluginType = plugin.GetType();
+        if (pluginType.GetMethod("StartFollow", BindingFlags.Public | BindingFlags.Instance) is null
+            || pluginType.GetMethod("StopFollow", BindingFlags.Public | BindingFlags.Instance) is null)
+            return "The installed ButlerV5 plugin does not expose the expected follow controls.";
+
+        if (!ReadBooleanProperty(plugin, "PluginEnabled", true))
+            return "ButlerV5 is disabled in its plugin options.";
+
+        if (ReadBooleanProperty(plugin, "IsScriptRunning", false))
+            return "ButlerV5 cannot start while a Skua script is running.";
+
+        return null;
+    }
+
+    /// <summary>
     /// Resolves ButlerV5 and starts its public follow operation.
     /// </summary>
     /// <param name="pluginManager">The initialized Skua plugin manager.</param>
