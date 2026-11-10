@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Skua.Core.Interfaces;
 using Skua.Core.Models;
 using Skua.Core.Models.Servers;
@@ -77,28 +78,96 @@ internal static class HeadlessLoginFlow
         if (selectedServer is null)
             return false;
 
-        HeadlessConsole.Info($"Connecting to {selectedServer.Name}...");
-        bool selectedInClient = false;
+        int serverPort = selectedServer.Port > 0 ? selectedServer.Port : 5588;
+        HeadlessConsole.Info($"Preparing the {selectedServer.Name} connection ({selectedServer.IP}:{serverPort})...");
+
+        // AQW requires the server's XML socket policy before opening its game connection.
         try
         {
-            int port = selectedServer.Port > 0 ? selectedServer.Port : 5588;
-            selectedInClient = bot.Servers.ConnectIP(selectedServer.IP, port);
+            bot.Flash.Call("loadPolicyFile", selectedServer.IP, serverPort);
+            bot.Flash.Call("killLoginModals");
         }
         catch (Exception exception)
         {
-            HeadlessConsole.Debug($"Server-list selection was unavailable: {exception.Message}");
+            HeadlessConsole.Warn($"Could not prepare the server connection policy: {exception.Message}");
+        }
+
+        // Use Skua's normal server-list click path first. It selects the actual row in
+        // mcLogin and lets the game client perform its own connection handshake.
+        bool selectedInClient = false;
+        try
+        {
+            selectedInClient = bot.Flash.Call<bool>("clickServer", selectedServer.Name);
+        }
+        catch (Exception exception)
+        {
+            HeadlessConsole.Debug($"Server-list click was unavailable: {exception.Message}");
+        }
+
+        if (selectedInClient)
+            HeadlessConsole.Info($"Selected {selectedServer.Name} through the AQW server list.");
+        else
+        {
+            HeadlessConsole.Warn("The AQW server-list entry could not be clicked. Trying Skua's direct server bridge...");
+
+            string serverData = JsonSerializer.Serialize(new
+            {
+                sName = selectedServer.Name,
+                sIP = selectedServer.IP,
+                iChat = selectedServer.ChatLevel,
+                iPort = serverPort,
+                bOnline = selectedServer.Online,
+                sLang = selectedServer.Lang,
+                iCount = selectedServer.PlayerCount,
+                bUpg = selectedServer.Upgrade,
+                iMax = selectedServer.MaxPlayers,
+                iLevel = selectedServer.Level
+            });
+
+            try
+            {
+                selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
+            }
+            catch (Exception exception)
+            {
+                HeadlessConsole.Debug($"Direct server bridge was unavailable: {exception.Message}");
+            }
         }
 
         if (!selectedInClient)
         {
-            HeadlessConsole.Error($"Could not connect to {selectedServer.Name}.");
+            HeadlessConsole.Warn("Skua's server-selection bridge was unavailable. Falling back to ConnectIP...");
+            try
+            {
+                selectedInClient = bot.Servers.ConnectIP(selectedServer.IP, serverPort);
+            }
+            catch (Exception exception)
+            {
+                HeadlessConsole.Error($"Direct IP connection failed: {exception.GetType().Name}: {exception.Message}");
+            }
+        }
+
+        if (!selectedInClient)
+        {
+            string? modalMessage = GetActiveModalMessage(bot);
+            HeadlessConsole.Error($"The AQW client rejected the connection request for {selectedServer.Name}.");
+            if (!string.IsNullOrWhiteSpace(modalMessage))
+                HeadlessConsole.Error($"Game message: {modalMessage}");
             return false;
         }
 
-        bool connected = bot.Player.Playing && bot.Flash.IsWorldLoaded;
+        HeadlessConsole.Info($"Connection request accepted. Waiting for {selectedServer.Name} to finish loading...");
+        bool connected = await WaitForWorldLoadedAsync(bot, TimeSpan.FromSeconds(60), cancellationToken);
         if (!connected)
         {
-            HeadlessConsole.Error($"Timed out while connecting to {selectedServer.Name}.");
+            string? modalMessage = GetActiveModalMessage(bot);
+            string connectionDetail = GetConnectionDetail(bot);
+            HeadlessConsole.Error($"The connection to {selectedServer.Name} did not reach a loaded game world.");
+            HeadlessConsole.Error($"Connection state: Playing={bot.Player.Playing}, WorldLoaded={bot.Flash.IsWorldLoaded}.");
+            if (!string.IsNullOrWhiteSpace(modalMessage))
+                HeadlessConsole.Error($"Game message: {modalMessage}");
+            if (!string.IsNullOrWhiteSpace(connectionDetail) && !string.Equals(connectionDetail, "null", StringComparison.OrdinalIgnoreCase))
+                HeadlessConsole.Error($"AQW connection detail: {connectionDetail}");
             return false;
         }
 
@@ -110,6 +179,69 @@ internal static class HeadlessLoginFlow
             ("Server", selectedServer.Name),
             ("Mode", "Headless"));
         return true;
+    }
+
+    /// <summary>
+    /// Waits until the selected AQW server has finished loading the game world.
+    /// </summary>
+    /// <param name="bot">The initialized Skua script interface.</param>
+    /// <param name="timeout">Maximum time allowed for world loading.</param>
+    /// <param name="cancellationToken">Token used to cancel the connection wait.</param>
+    /// <returns>True when the player is playing and the world is loaded.</returns>
+    private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            if (bot.Player.Playing && bot.Flash.IsWorldLoaded)
+                return true;
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return bot.Player.Playing && bot.Flash.IsWorldLoaded;
+    }
+
+    /// <summary>
+    /// Reads the current AQW modal text when the Flash bridge is available.
+    /// </summary>
+    /// <param name="bot">The initialized Skua script interface.</param>
+    /// <returns>The active message, or null when no message is shown.</returns>
+    private static string? GetActiveModalMessage(IScriptInterface bot)
+    {
+        try
+        {
+            string? message = bot.Flash.Call<string>("getActiveModalMessage");
+            return string.IsNullOrWhiteSpace(message) || string.Equals(message, "null", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : message.Trim();
+        }
+        catch (Exception exception)
+        {
+            HeadlessConsole.Debug($"Could not read the AQW modal message: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the connection-stage detail shown by the AQW login screen.
+    /// </summary>
+    /// <param name="bot">The initialized Skua script interface.</param>
+    /// <returns>The connection detail text, or null when it is unavailable.</returns>
+    private static string GetConnectionDetail(IScriptInterface bot)
+    {
+        try
+        {
+            return bot.Flash.IsNull("mcConnDetail.stage")
+                ? string.Empty
+                : bot.Flash.GetGameObject("mcConnDetail.txtDetail.text", string.Empty) ?? string.Empty;
+        }
+        catch (Exception exception)
+        {
+            HeadlessConsole.Debug($"Could not read the AQW connection detail: {exception.Message}");
+            return string.Empty;
+        }
     }
 
     private static async Task<bool> WaitForServerListAsync(IScriptInterface bot, CancellationToken cancellationToken)
