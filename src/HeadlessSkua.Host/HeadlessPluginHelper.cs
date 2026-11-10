@@ -1,4 +1,5 @@
 using Skua.Core.Interfaces;
+using Skua.Headless.UI;
 
 namespace HeadlessSkua;
 
@@ -13,7 +14,7 @@ internal sealed class HeadlessPluginHelper : IPluginHelper
     /// <inheritdoc />
     public void AddMenuButton(string text, Action action)
     {
-        Console.WriteLine($"[Plugin] Ignoring desktop menu button '{text}' in headless mode.");
+        HeadlessConsole.Debug($"[Plugin] Ignoring desktop menu button '{text}' in headless mode.");
     }
 
     /// <inheritdoc />
