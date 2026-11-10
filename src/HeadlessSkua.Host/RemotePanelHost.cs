@@ -125,6 +125,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private void MapApi(WebApplication app)
     {
         app.MapGet("/api/status", GetStatus);
+        app.MapGet("/api/scripts", GetScripts);
         app.MapGet("/api/logs", GetLogs);
         app.MapPost("/api/script/start", StartScriptAsync);
         app.MapPost("/api/script/stop", StopScript);
@@ -169,6 +170,41 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             butlerAvailable = butlerBlockReason is null,
             butlerBlockReason
         });
+    }
+
+    private IResult GetScripts()
+    {
+        string scriptsDirectory = ClientFileSources.SkuaScriptsDIR;
+        if (!Directory.Exists(scriptsDirectory))
+            return Results.Ok(new { directory = scriptsDirectory, scripts = Array.Empty<object>() });
+
+        try
+        {
+            EnumerationOptions options = new()
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+            };
+
+            object[] scripts = Directory.EnumerateFiles(scriptsDirectory, "*.cs", options)
+                .Select(path => new
+                {
+                    name = Path.GetRelativePath(scriptsDirectory, path).Replace(Path.DirectorySeparatorChar, '/'),
+                    path = Path.GetFullPath(path)
+                })
+                .OrderBy(script => script.name, StringComparer.OrdinalIgnoreCase)
+                .Take(500)
+                .Cast<object>()
+                .ToArray();
+
+            return Results.Ok(new { directory = scriptsDirectory, scripts });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            HeadlessConsole.Error($"Could not enumerate Skua scripts for the remote panel: {exception.Message}");
+            return Results.Problem("The Skua scripts folder could not be read.");
+        }
     }
 
     private IResult GetLogs()
