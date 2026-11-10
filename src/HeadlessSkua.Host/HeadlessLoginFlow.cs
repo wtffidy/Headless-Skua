@@ -226,13 +226,11 @@ internal static class HeadlessLoginFlow
         DateTime deadline = DateTime.UtcNow.Add(timeout);
         DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
         DateTime nextPlayingCheck = DateTime.MaxValue;
-        DateTime nextPlayerLoadedCheck = DateTime.MaxValue;
         DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
         bool loginResponseReceived = false;
         bool worldReady = false;
         bool avatarReady = false;
         bool playing = false;
-        bool playerReady = false;
 
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
@@ -280,29 +278,21 @@ internal static class HeadlessLoginFlow
                 playing = bot.Player.Playing;
                 nextPlayingCheck = now.AddMilliseconds(500);
                 if (playing)
-                    nextPlayerLoadedCheck = DateTime.MinValue;
-            }
-
-            if (playing && !playerReady && now >= nextPlayerLoadedCheck)
-            {
-                playerReady = bot.Player.Loaded;
-                nextPlayerLoadedCheck = now.AddMilliseconds(500);
-                if (playerReady)
                 {
-                    HeadlessConsole.Debug($"VibeSkua player fully loaded after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
+                    HeadlessConsole.Success($"AQW character entered the world after {connectionTimer.Elapsed.TotalSeconds:F1}s.");
                     return true;
                 }
             }
 
             if (now >= nextDiagnostic)
             {
-                HeadlessConsole.Debug($"AQW initialization: world={worldReady}, avatar={avatarReady}, playing={playing}, playerLoaded={playerReady} ({connectionTimer.Elapsed.TotalSeconds:F1}s).");
+                HeadlessConsole.Debug($"AQW initialization: world={worldReady}, avatar={avatarReady}, playing={playing} ({connectionTimer.Elapsed.TotalSeconds:F1}s).");
                 nextDiagnostic = now.AddSeconds(5);
             }
 
             if (now >= nextHeartbeat)
             {
-                HeadlessConsole.Debug("AQW initialization is still waiting for the player.");
+                HeadlessConsole.Debug("AQW initialization is still waiting for the character.");
                 nextHeartbeat = now.AddSeconds(5);
             }
 
@@ -310,11 +300,51 @@ internal static class HeadlessLoginFlow
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        worldReady = bot.Flash.IsWorldLoaded;
-        avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
-        playing = avatarReady && bot.Player.Playing;
-        playerReady = playing && bot.Player.Loaded;
-        return playerReady;
+        bool finalWorldReady = bot.Flash.IsWorldLoaded;
+        bool finalAvatarReady = finalWorldReady && !bot.Flash.IsNull("world.myAvatar");
+        return finalAvatarReady && bot.Player.Playing;
+    }
+
+    /// <summary>
+    /// Waits for inventory data and character assets before starting automation.
+    /// </summary>
+    /// <param name="bot">The initialized Skua script interface.</param>
+    /// <param name="timeout">Maximum time allowed for player initialization.</param>
+    /// <param name="cancellationToken">Token used to cancel the wait.</param>
+    /// <returns>True when VibeSkua reports that the player is ready for scripts.</returns>
+    public static async Task<bool> WaitForAutomationReadyAsync(IScriptInterface bot, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Stopwatch initializationTimer = Stopwatch.StartNew();
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        DateTime nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+
+        HeadlessConsole.Info("Waiting for inventory and character assets before starting automation...");
+
+        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            bool worldReady = bot.Flash.IsWorldLoaded;
+            bool avatarReady = worldReady && !bot.Flash.IsNull("world.myAvatar");
+            bool playing = avatarReady && bot.Player.Playing;
+            bool playerReady = playing && bot.Player.Loaded;
+
+            if (playerReady)
+            {
+                HeadlessConsole.Success($"VibeSkua player ready for automation in {initializationTimer.Elapsed.TotalSeconds:F1}s.");
+                return true;
+            }
+
+            if (DateTime.UtcNow >= nextDiagnostic)
+            {
+                HeadlessConsole.Debug($"Automation readiness: world={worldReady}, avatar={avatarReady}, playing={playing}, playerLoaded={playerReady} ({initializationTimer.Elapsed.TotalSeconds:F1}s).");
+                nextDiagnostic = DateTime.UtcNow.AddSeconds(5);
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        HeadlessConsole.Error($"VibeSkua did not finish player initialization within {timeout.TotalSeconds:F0}s.");
+        return false;
     }
 
     /// <summary>
