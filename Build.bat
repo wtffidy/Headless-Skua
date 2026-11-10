@@ -10,6 +10,10 @@ set "PROJECT=src\HeadlessSkua.Host\HeadlessSkua.Host.csproj"
 set "CONFIGURATION=Release"
 set "RUNTIME=win-x64"
 
+echo [0/8] Closing any running Headless Skua instances...
+taskkill /F /T /IM HeadlessSkua.exe >nul 2>nul
+timeout /t 1 /nobreak >nul
+
 echo.
 echo  ==========================================
 echo           HEADLESS SKUA - BUILD
