@@ -324,5 +324,6 @@ internal static class Program
         Console.WriteLine($"Base directory   : {AppContext.BaseDirectory}");
         Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine("runtime", "ruffle-host", "ruffle", "ruffle.js"))}");
         Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine("runtime", "ruffle-host", "game", "skua.swf"))}");
+        Console.WriteLine($"Remote panel     : {File.Exists(Path.Combine(AppContext.BaseDirectory, "panel", "index.html"))}");
     }
 }
