@@ -132,8 +132,11 @@ internal static class Program
             {
                 sessionState.Observe(name, values);
 
-                if (!HeadlessConsole.Quiet)
-                    HeadlessConsole.Debug($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
+                if (!HeadlessConsole.Quiet
+                    && !name.Equals("packetFromServer", StringComparison.OrdinalIgnoreCase)
+                    && !name.Equals("pext", StringComparison.OrdinalIgnoreCase)
+                    && !name.Equals("debug", StringComparison.OrdinalIgnoreCase))
+                    HeadlessConsole.Debug($"[AS3 -> Host] {name}");
 
                 if (string.Equals(name, "loaded", StringComparison.OrdinalIgnoreCase))
                 {
