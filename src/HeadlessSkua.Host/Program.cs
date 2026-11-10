@@ -166,7 +166,9 @@ internal static class Program
             ServiceCollection services = new();
             services.AddHeadlessSkua(flash);
 
-            await using ServiceProvider serviceProvider = services.BuildServiceProvider();
+            ServiceProvider serviceProvider = services.BuildServiceProvider();
+            try
+            {
             Ioc.Default.ConfigureServices(serviceProvider);
             Skua.Core.Models.ClientFileSources.EnsureInitialized();
 
@@ -250,6 +252,18 @@ internal static class Program
             HeadlessConsole.Success("Headless game runtime ready. Press Ctrl+C to stop.");
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
             return 0;
+            }
+            finally
+            {
+                try
+                {
+                    await serviceProvider.DisposeAsync();
+                }
+                catch (OperationCanceledException exception)
+                {
+                    HeadlessConsole.Debug($"Skua background services canceled during shutdown: {exception.Message}");
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationTokenSource.IsCancellationRequested)
         {
