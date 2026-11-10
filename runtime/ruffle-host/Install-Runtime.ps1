@@ -7,6 +7,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if (-not [string]::IsNullOrWhiteSpace($env:HEADLESS_SKUA_RUFFLE_VERSION)) {
+    $Version = $env:HEADLESS_SKUA_RUFFLE_VERSION
+}
+
 $runtimeRoot = $PSScriptRoot
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $ruffleTarget = Join-Path $runtimeRoot "ruffle"
