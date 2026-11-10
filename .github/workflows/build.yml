@@ -27,3 +27,7 @@ jobs:
 
       - name: Build
         run: dotnet build HeadlessSkua.sln --configuration Release --no-restore
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: ./src/HeadlessSkua.Host/bin/Release/net10.0/playwright.ps1 install chromium
