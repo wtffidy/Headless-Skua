@@ -139,10 +139,11 @@ internal static class HeadlessLoginFlow
                 if (int.TryParse(choice, out int selection) && selection >= 1 && selection <= accounts.Count)
                 {
                     ManagedAccount account = accounts[selection - 1];
-                    string password = account.Password.StartsWith("enc:", StringComparison.Ordinal)
-                        ? CryptoUtils.Decrypt(account.Password)
-                        : account.Password;
-                    return (account.Username, password);
+                    string storedPassword = account.Password ?? string.Empty;
+                    string password = storedPassword.StartsWith("enc:", StringComparison.Ordinal)
+                        ? CryptoUtils.Decrypt(storedPassword)
+                        : storedPassword;
+                    return (account.Username ?? string.Empty, password);
                 }
 
                 HeadlessConsole.Warn("Choose an account number or M for manual login.");
