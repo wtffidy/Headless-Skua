@@ -208,7 +208,9 @@
         byId("characterState").textContent = !status.avatarLoaded ? "Pending" : !status.playerLoaded ? "Loading" : status.alive ? "Alive" : "Not alive";
         byId("characterState").className = status.alive ? "good" : "wait";
         byId("serverName").textContent = status.server || "—";
-        byId("mapName").textContent = status.map || "—";
+        byId("mapName").textContent = status.map
+          ? `${status.map} · ${status.mapLoaded ? "Ready" : status.mapLoading ? "Loading" : "Not ready"}`
+          : "—";
         byId("playerLevel").textContent = status.level ?? "—";
         byId("playerGold").textContent = status.gold == null ? "—" : Number(status.gold).toLocaleString();
         byId("scriptState").textContent = status.scriptStopping ? "Stopping…" : status.scriptRunning ? "Running" : "Idle";
