@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Headless Skua Runtime</title>
+  <script>
+    window.RufflePlayer = window.RufflePlayer || {};
+    window.RufflePlayer.config = {
+      autoplay: "on",
+      logLevel: "info",
+      networking: "all",
+      showSwfDownload: false,
+      unmuteOverlay: "hidden"
+    };
+  </script>
+  <script src="./ruffle/ruffle.js"></script>
+  <script src="./bridge.js"></script>
+</head>
+<body>
+  <main id="game-root" aria-label="Headless game runtime"></main>
+  <script>
+    window.__headlessSkua.start({
+      container: document.getElementById("game-root"),
+      swfUrl: new URLSearchParams(window.location.search).get("swf") || "./game/skua.swf"
+    }).catch(error => {
+      console.error("[HeadlessSkua] Runtime startup failed.", error);
+      window.__headlessSkua.setStatus("failed", String(error));
+    });
+  </script>
+</body>
+</html>
