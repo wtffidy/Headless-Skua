@@ -216,6 +216,11 @@ internal sealed class RuffleRuntime : IAsyncDisposable
     /// <param name="cancellationToken">Token used to cancel browser startup.</param>
     private async Task StartBrowserAsync(CancellationToken cancellationToken)
     {
+        // Single-file publishing bundles Microsoft.Playwright.dll, so Playwright cannot
+        // infer the external driver location from Assembly.Location. The build copies
+        // .playwright beside HeadlessSkua.exe; explicitly point Playwright there.
+        Environment.SetEnvironmentVariable("PLAYWRIGHT_DRIVER_SEARCH_PATH", AppContext.BaseDirectory);
+
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
