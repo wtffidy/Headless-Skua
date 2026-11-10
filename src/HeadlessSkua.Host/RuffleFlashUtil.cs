@@ -259,7 +259,28 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     /// <returns>True when module callbacks can safely access their game objects.</returns>
     private bool IsModulesReady()
     {
-        return !IsNullPath("world.avatars") && !IsNullPath("ui.ModalStack");
+        if (IsNullPath("world.avatars")
+            || IsNullPath("ui.ModalStack")
+            || IsNullPath("world.myAvatar"))
+            return false;
+
+        JsonElement? itemCountResult = _runtime.CallActionScriptAsync(
+            "getGameObject",
+            new object[] { "world.myAvatar.items.length" }).GetAwaiter().GetResult();
+        int itemCount = ConvertResult(itemCountResult, typeof(int)) is int count ? count : 0;
+        if (itemCount <= 0)
+            return false;
+
+        JsonElement? mapLoadingResult = _runtime.CallActionScriptAsync(
+            "getGameObject",
+            new object[] { "world.mapLoadInProgress" }).GetAwaiter().GetResult();
+        if (ConvertResult(mapLoadingResult, typeof(bool)) is true)
+            return false;
+
+        JsonElement? artLoadedResult = _runtime.CallActionScriptAsync(
+            "callGameFunction0",
+            new object[] { "world.myAvatar.pMC.artLoaded" }).GetAwaiter().GetResult();
+        return ConvertResult(artLoadedResult, typeof(bool)) is true;
     }
 
     /// <summary>
@@ -475,6 +496,12 @@ internal sealed class RuffleFlashUtil : IFlashUtil
     {
         if (function.Equals("connectionLost", StringComparison.OrdinalIgnoreCase))
             _readCallCache.Clear();
+
+        // VibeSkua normally starts its 20 ms ScriptTimer from the SWF's early "loaded"
+        // callback. In headless mode the AQW world and avatar are not ready at that point.
+        // Program explicitly initializes IScriptInterfaceManager after WaitForAutomationReadyAsync.
+        if (function.Equals("loaded", StringComparison.OrdinalIgnoreCase))
+            return;
 
         object[] values = arguments.ValueKind == JsonValueKind.Array
             ? arguments.EnumerateArray().Select(value => ConvertJsonElement(value)!).ToArray()
