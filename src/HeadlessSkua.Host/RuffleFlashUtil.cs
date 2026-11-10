@@ -20,7 +20,9 @@ internal sealed class RuffleFlashUtil : IFlashUtil
 
     private readonly RuffleRuntime _runtime;
     private readonly ConcurrentDictionary<string, DeferredModuleCall> _deferredModuleCalls = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentQueue<(string Function, object[] Arguments)> _hostCalls = new();
     private int _flushingDeferredModuleCalls;
+    private int _processingHostCalls;
 
     /// <inheritdoc />
     public event FlashCallHandler? FlashCall;
@@ -343,6 +345,35 @@ internal sealed class RuffleFlashUtil : IFlashUtil
             ? arguments.EnumerateArray().Select(value => ConvertJsonElement(value)!).ToArray()
             : Array.Empty<object>();
 
-        FlashCall?.Invoke(function, values);
+        // Never run Skua event handlers inside Playwright's exposed-binding callback.
+        // A handler may call back into Flash, which would re-enter the same browser page
+        // while Chromium is still servicing this host binding and deadlock the bridge.
+        _hostCalls.Enqueue((function, values));
+        if (Interlocked.Exchange(ref _processingHostCalls, 1) == 0)
+            _ = Task.Run(ProcessHostCalls);
+    }
+
+    /// <summary>
+    /// Processes ActionScript callbacks sequentially after the Playwright binding has returned.
+    /// </summary>
+    private void ProcessHostCalls()
+    {
+        do
+        {
+            while (_hostCalls.TryDequeue(out (string Function, object[] Arguments) call))
+            {
+                try
+                {
+                    FlashCall?.Invoke(call.Function, call.Arguments);
+                }
+                catch (Exception exception)
+                {
+                    Console.Error.WriteLine($"[Ruffle Host Callback] {call.Function}: {exception.GetType().Name}: {exception.Message}");
+                }
+            }
+
+            Volatile.Write(ref _processingHostCalls, 0);
+        }
+        while (!_hostCalls.IsEmpty && Interlocked.Exchange(ref _processingHostCalls, 1) == 0);
     }
 }
