@@ -183,7 +183,15 @@ internal sealed class RuffleRuntime : IAsyncDisposable
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
             Headless = true,
-            Args = new[] { "--disable-dev-shm-usage" }
+            // AQW's gameversion endpoint does not send CORS headers for the local
+            // Ruffle origin. This browser is isolated from the user's profile and
+            // only hosts the bundled Skua runtime, so disable web security here to
+            // allow the legacy SWF loader to fetch AQW's game assets.
+            Args = new[]
+            {
+                "--disable-dev-shm-usage",
+                "--disable-web-security"
+            }
         });
 
         _browserContext = await _browser.NewContextAsync();
