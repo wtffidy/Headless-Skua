@@ -17,7 +17,7 @@
     .stats{grid-template-columns:repeat(6,minmax(0,1fr))}
     .script-selection{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #344056;background:#0c121d;border-radius:11px;padding:12px}
     .script-selection-info{min-width:0;display:flex;flex-direction:column;gap:5px}
-    .script-selection-info strong{font-size:12px;overflow-wrap:anywhere}
+    .script-diagnostics{margin-top:12px;border:1px solid #2b3548;background:#0d1420;border-radius:10px;padding:10px 12px}.script-diagnostics summary{cursor:pointer;color:#b9c6d9;font-size:11px;font-weight:650}.script-diagnostics pre{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#96a7bd;font:10px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;margin:10px 0 0}.script-selection-info strong{font-size:12px;overflow-wrap:anywhere}
     .script-selection-info span{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
     .explorer-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:22px;background:#050811c9;backdrop-filter:blur(8px)}
     .explorer-backdrop[hidden]{display:none}
@@ -100,6 +100,10 @@
             <p class="hint" id="scriptsHint">The explorer shows folders and C# scripts installed on the Headless Skua computer.</p>
           </div>
           <div class="actions"><button id="startScript" type="submit">Start script</button><button class="danger" id="stopScript" type="button">Stop script</button></div>
+          <details class="script-diagnostics" id="scriptDiagnosticsPanel">
+            <summary>Script execution trace</summary>
+            <pre id="scriptDiagnostics">No script is running.</pre>
+          </details>
         </form>
       </article>
 
@@ -207,8 +211,12 @@
         byId("mapName").textContent = status.map || "—";
         byId("playerLevel").textContent = status.level ?? "—";
         byId("playerGold").textContent = status.gold == null ? "—" : Number(status.gold).toLocaleString();
-        byId("scriptState").textContent = status.scriptRunning ? "Running" : "Idle";
-        byId("scriptState").className = status.scriptRunning ? "good" : "";
+        byId("scriptState").textContent = status.scriptStopping ? "Stopping…" : status.scriptRunning ? "Running" : "Idle";
+        byId("scriptState").className = status.scriptRunning ? (status.scriptStopping ? "wait" : "good") : "";
+        const diagnostics = status.scriptDiagnostics || {};
+        byId("scriptDiagnostics").textContent = status.scriptRunning
+          ? `Thread: ${diagnostics.threadState || "Unknown"}${diagnostics.threadId == null ? "" : ` (#${diagnostics.threadId})`}\n\n${diagnostics.stackTrace || "Waiting for the script worker stack…"}`
+          : "No script is running.";
         byId("butlerState").textContent = status.butlerRunning
           ? "Following"
           : !status.butlerAvailable
