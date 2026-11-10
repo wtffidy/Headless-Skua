@@ -19,11 +19,12 @@ The build script restores and builds the solution, installs Chromium and Ruffle,
 ```
 Build\
 ├── HeadlessSkua.exe
-├── HeadlessSkua.dll
 ├── plugins\
 │   └── ButlerV5.dll
 └── runtime\
     └── ruffle-host\
+        ├── index.html
+        ├── bridge.js
         ├── ruffle\
         └── game\
             └── skua.swf
