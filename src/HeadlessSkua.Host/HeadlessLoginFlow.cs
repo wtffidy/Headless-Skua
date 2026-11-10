@@ -182,7 +182,7 @@ internal static class HeadlessLoginFlow
         bot.Servers.LastIP = selectedServer.IP;
         bot.Servers.LastName = selectedServer.Name;
         HeadlessConsole.Info($"Connection request accepted. Waiting for {selectedServer.Name} to finish loading...");
-        bool connected = await WaitForWorldLoadedAsync(bot, TimeSpan.FromSeconds(60), cancellationToken);
+        bool connected = await WaitForWorldLoadedAsync(bot, sessionState, TimeSpan.FromSeconds(60), cancellationToken);
         if (!connected)
         {
             string? modalMessage = GetActiveModalMessage(bot);
@@ -213,13 +213,37 @@ internal static class HeadlessLoginFlow
     /// <param name="timeout">Maximum time allowed for world loading.</param>
     /// <param name="cancellationToken">Token used to cancel the connection wait.</param>
     /// <returns>True when the player is playing and the world is loaded.</returns>
-    private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, TimeSpan timeout, CancellationToken cancellationToken)
+    private static async Task<bool> WaitForWorldLoadedAsync(IScriptInterface bot, HeadlessSessionState sessionState, TimeSpan timeout, CancellationToken cancellationToken)
     {
         DateTime deadline = DateTime.UtcNow.Add(timeout);
-        DateTime nextDiagnostic = DateTime.UtcNow;
+        DateTime nextDiagnostic = DateTime.MaxValue;
         DateTime nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
+        bool loginResponseReceived = false;
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
+            // Do not call back into Ruffle while it is still dispatching the server-login
+            // response through ExternalInterface. Wait for the host callback to finish first.
+            if (!loginResponseReceived)
+            {
+                (bool loginAccepted, _) = sessionState.GetSnapshot();
+                if (!loginAccepted)
+                {
+                    if (DateTime.UtcNow >= nextHeartbeat)
+                    {
+                        HeadlessConsole.Debug("Waiting for AQW to accept the game login before querying the Flash bridge.");
+                        nextHeartbeat = DateTime.UtcNow.AddSeconds(5);
+                    }
+
+                    await Task.Delay(100, cancellationToken);
+                    continue;
+                }
+
+                loginResponseReceived = true;
+                await Task.Delay(500, cancellationToken);
+                HeadlessConsole.Debug("AQW login response received. Starting game-world initialization checks.");
+                nextDiagnostic = DateTime.UtcNow;
+            }
+
             if (DateTime.UtcNow >= nextDiagnostic)
             {
                 HeadlessConsole.Debug("AQW initialization probe: checking objLogin...");
