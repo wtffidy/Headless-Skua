@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="../../HeadlessConsole.cs" Link="HeadlessConsole.cs" />
+    <Content Include="../../panel/**/*" Link="panel/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.Playwright" Version="1.56.0" />
     <ProjectReference Include="../../vendor/VibeSkua/Skua.Core/Skua.Core.csproj" />
