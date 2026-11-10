@@ -497,12 +497,9 @@ internal sealed class RuffleFlashUtil : IFlashUtil
         if (function.Equals("connectionLost", StringComparison.OrdinalIgnoreCase))
             _readCallCache.Clear();
 
-        // VibeSkua normally starts its 20 ms ScriptTimer from the SWF's early "loaded"
-        // callback. In headless mode the AQW world and avatar are not ready at that point.
-        // Program explicitly initializes IScriptInterfaceManager after WaitForAutomationReadyAsync.
-        if (function.Equals("loaded", StringComparison.OrdinalIgnoreCase))
-            return;
-
+        // Forward the early "loaded" signal to Program so startup can continue, but do not
+        // initialize VibeSkua's ScriptTimer here. Program's handler only completes its
+        // bootstrap wait; IScriptInterfaceManager is initialized after AQW's avatar is ready.
         object[] values = arguments.ValueKind == JsonValueKind.Array
             ? arguments.EnumerateArray().Select(value => ConvertJsonElement(value)!).ToArray()
             : Array.Empty<object>();
