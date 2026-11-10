@@ -139,6 +139,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     {
         app.MapGet("/api/status", GetStatus);
         app.MapGet("/api/scripts", (string? path) => GetScripts(path));
+        app.MapGet("/api/scripts/search", (string? q) => SearchScripts(q));
         app.MapGet("/api/logs", GetLogs);
         app.MapPost("/api/script/start", StartScriptAsync);
         app.MapPost("/api/script/stop", StopScript);
@@ -327,6 +328,57 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         {
             HeadlessConsole.Error($"Could not browse the VibeSkua Scripts folder: {exception.Message}");
             return Results.Problem("The VibeSkua Scripts folder could not be browsed.");
+        }
+    }
+
+    /// <summary>
+    /// Searches script names and relative paths throughout the Scripts folder.
+    /// </summary>
+    /// <param name="query">Text to match against script names or paths.</param>
+    /// <returns>Matching C# scripts with paths relative to the Scripts root.</returns>
+    private IResult SearchScripts(string? query)
+    {
+        string searchTerm = query?.Trim() ?? string.Empty;
+        if (searchTerm.Length < 2)
+            return Results.Ok(new { query = searchTerm, files = Array.Empty<object>() });
+
+        string scriptsRoot = Path.GetFullPath(ClientFileSources.SkuaScriptsDIR);
+        Directory.CreateDirectory(scriptsRoot);
+
+        try
+        {
+            EnumerationOptions options = new()
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                ReturnSpecialDirectories = false,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+            };
+
+            string[] matches = Directory.EnumerateFiles(scriptsRoot, "*.cs", options)
+                .Select(file => new
+                {
+                    FullPath = file,
+                    RelativePath = Path.GetRelativePath(scriptsRoot, file).Replace(Path.DirectorySeparatorChar, '/')
+                })
+                .Where(file => file.RelativePath.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .Take(500)
+                .Select(file => file.RelativePath)
+                .ToArray();
+
+            object[] files = matches.Select(relativePath => (object)new
+            {
+                name = Path.GetFileName(relativePath),
+                path = relativePath
+            }).ToArray();
+
+            return Results.Ok(new { query = searchTerm, files });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            HeadlessConsole.Error($"Could not search the VibeSkua Scripts folder: {exception.Message}");
+            return Results.Problem("The VibeSkua Scripts folder could not be searched.");
         }
     }
 
