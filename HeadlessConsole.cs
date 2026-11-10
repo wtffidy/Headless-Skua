@@ -301,7 +301,11 @@ public static class HeadlessConsole
     public static void Success(string msg) => Log(LogLevel.Success, msg);
     public static void Warn(string msg) => Log(LogLevel.Warn, msg);
     public static void Error(string msg) => Log(LogLevel.Error, msg);
-    public static void Debug(string msg) => Log(LogLevel.Debug, msg);
+    public static void Debug(string msg)
+    {
+        if (!Quiet)
+            Log(LogLevel.Debug, msg);
+    }
 
     /// <summary>Item drop / farming line, e.g. ◆ +3 Dragon Scale (47/100)</summary>
     public static void Item(string name, int gained, int total, int? goal = null)
