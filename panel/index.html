@@ -25,7 +25,7 @@
     .explorer-header,.explorer-toolbar,.explorer-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 17px;border-bottom:1px solid #293548}
     .explorer-header h2{font-size:17px;margin:5px 0 0}
     .explorer-close{padding:7px 10px}
-    .explorer-toolbar{justify-content:flex-start;background:#141e2c}
+    .explorer-toolbar{justify-content:flex-start;background:#141e2c}.explorer-search{flex:1;min-width:120px;max-width:360px}
     .explorer-breadcrumb{display:flex;align-items:center;gap:7px;flex:1;min-width:0;overflow:auto;white-space:nowrap}
     .breadcrumb-item{padding:6px 8px;background:transparent;border:0;color:#cdd7e7;font-size:11px}
     .breadcrumb-separator{color:#68758a}
@@ -126,6 +126,7 @@
       <div class="explorer-toolbar">
         <button class="secondary" id="explorerUp" type="button" disabled>↑ Up</button>
         <div class="explorer-breadcrumb" id="explorerBreadcrumb"></div>
+        <input class="explorer-search" id="explorerSearch" type="search" placeholder="Search all scripts…" autocomplete="off" aria-label="Search all scripts">
         <button class="secondary" id="explorerRefresh" type="button">Refresh</button>
       </div>
       <div class="explorer-body">
@@ -237,6 +238,7 @@
     let explorerPath = "";
     let explorerParentPath = null;
     let explorerSelection = null;
+    let explorerSearchTimer = 0;
 
     function closeExplorer() {
       byId("explorerBackdrop").hidden = true;
@@ -343,6 +345,41 @@
       }
     }
 
+    async function searchExplorerScripts(query) {
+      const list = byId("explorerList");
+      list.replaceChildren();
+      setExplorerSelection(null);
+
+      if (!query.trim()) {
+        await loadExplorerDirectory(explorerPath);
+        return;
+      }
+
+      list.innerHTML = '<div class="explorer-empty">Searching all scripts…</div>';
+      try {
+        const result = await api(`/api/scripts/search?q=${encodeURIComponent(query.trim())}`);
+        explorerPath = "";
+        explorerParentPath = null;
+        byId("explorerUp").disabled = true;
+        renderExplorerBreadcrumb();
+        list.replaceChildren();
+
+        for (const file of result.files || []) addExplorerEntry(list, file, false);
+
+        if (list.childElementCount === 0) {
+          list.innerHTML = '<div class="explorer-empty">No scripts matched that search. Try a different name or folder.</div>';
+        }
+
+        byId("scriptsHint").textContent = `Found ${(result.files || []).length} matching scripts across the Scripts folder.`;
+      } catch (error) {
+        list.replaceChildren();
+        const message = document.createElement("div");
+        message.className = "explorer-empty";
+        message.textContent = error.message;
+        list.appendChild(message);
+      }
+    }
+
     function useExplorerSelection() {
       if (!explorerSelection) return;
       byId("scriptPath").value = explorerSelection.path;
@@ -353,7 +390,13 @@
 
     byId("browseScripts").addEventListener("click", async () => {
       byId("explorerBackdrop").hidden = false;
+      byId("explorerSearch").value = "";
       await loadExplorerDirectory("");
+    });
+    byId("explorerSearch").addEventListener("input", () => {
+      window.clearTimeout(explorerSearchTimer);
+      const query = byId("explorerSearch").value;
+      explorerSearchTimer = window.setTimeout(() => searchExplorerScripts(query), 180);
     });
     byId("closeExplorer").addEventListener("click", closeExplorer);
     byId("cancelExplorer").addEventListener("click", closeExplorer);
@@ -364,7 +407,11 @@
     byId("explorerUp").addEventListener("click", () => {
       if (explorerParentPath !== null) loadExplorerDirectory(explorerParentPath);
     });
-    byId("explorerRefresh").addEventListener("click", () => loadExplorerDirectory(explorerPath));
+    byId("explorerRefresh").addEventListener("click", () => {
+      const query = byId("explorerSearch").value.trim();
+      if (query) searchExplorerScripts(query);
+      else loadExplorerDirectory(explorerPath);
+    });
     byId("useExplorerSelection").addEventListener("click", useExplorerSelection);
     byId("clearScript").addEventListener("click", () => {
       byId("scriptPath").value = "";
