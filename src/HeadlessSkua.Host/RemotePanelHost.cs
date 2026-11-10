@@ -159,7 +159,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         bool avatarLoaded = worldLoaded && snapshot.AvatarLoaded;
         bool playerLoaded = avatarLoaded && snapshot.PlayerLoaded;
         bool alive = avatarLoaded && snapshot.Alive;
-        bool connected = loggedIn && worldLoaded && avatarLoaded && playerLoaded && alive;
+        bool scriptReady = loggedIn && worldLoaded && avatarLoaded && playerLoaded;
+        bool connected = scriptReady && alive;
         string? account = string.IsNullOrWhiteSpace(acceptedAccount) ? snapshot.Account : acceptedAccount;
         string? server = string.IsNullOrWhiteSpace(_bot.Servers.LastName) ? snapshot.Server : _bot.Servers.LastName;
         string runtime = !loggedIn
@@ -190,6 +191,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         return Results.Ok(new
         {
             connected,
+            scriptReady,
             loggedIn,
             loginState = loggedIn ? "Accepted" : "Waiting",
             loginSource = loginAccepted ? "AQW login response" : "Skua player state",
@@ -478,6 +480,18 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     }
 
     /// <summary>
+    /// Checks the authoritative AQW login response and VibeSkua's player-loaded state.
+    /// Script execution does not require the character to be alive.
+    /// </summary>
+    /// <returns>True when the character, inventory, map, and assets are ready for scripts.</returns>
+    private bool IsScriptReady()
+    {
+        (bool loginAccepted, _) = _sessionState.GetSnapshot();
+        GameStatusSnapshot snapshot = GetStatusSnapshot();
+        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.AvatarLoaded && snapshot.PlayerLoaded;
+    }
+
+    /// <summary>
     /// Checks the authoritative AQW login response and Skua's world/avatar readiness flags.
     /// </summary>
     /// <returns>True when the character is loaded and alive.</returns>
@@ -490,8 +504,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
     {
-        if (!IsGameReady())
-            return Results.Conflict(new { error = "AQW is not ready. Finish login, wait for the game world, and make sure your character is alive." });
+        if (!IsScriptReady())
+            return Results.Conflict(new { error = "AQW is still initializing the character, inventory, or character assets." });
         if (_scriptManager.ScriptRunning)
             return Results.Conflict(new { error = "A script is already running." });
         if (string.IsNullOrWhiteSpace(request.Path))
