@@ -67,6 +67,80 @@ jobs:
           & (Join-Path $publishDir "HeadlessSkua.exe") doctor
           if ($LASTEXITCODE -ne 0) { throw "Published host diagnostics failed." }
 
+      - name: Smoke test remote panel API
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $env:RUNNER_TEMP "headless-skua-publish"
+          $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-panel.out.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-panel.err.log"
+          $process = Start-Process -FilePath (Join-Path $publishDir "HeadlessSkua.exe") -ArgumentList @("run", "--skip-login", "--quiet") -WorkingDirectory $publishDir -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $client = [System.Net.Http.HttpClient]::new()
+          $client.Timeout = [TimeSpan]::FromSeconds(5)
+
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(90)
+            $status = $null
+
+            while ([DateTime]::UtcNow -lt $deadline) {
+              if ($process.HasExited) {
+                throw "Headless Skua exited before the panel API became available."
+              }
+
+              try {
+                $response = $client.GetAsync("http://127.0.0.1:8788/api/status").GetAwaiter().GetResult()
+                if ($response.IsSuccessStatusCode) {
+                  $status = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+                  break
+                }
+              }
+              catch {
+              }
+
+              Start-Sleep -Seconds 1
+            }
+
+            if ($null -eq $status) {
+              if (Test-Path $stdout) { Get-Content $stdout }
+              if (Test-Path $stderr) { Get-Content $stderr }
+              throw "The remote panel status API did not become ready."
+            }
+
+            if ($status.connected -ne $false -or $status.runtime -ne "Not logged in") {
+              throw "The panel did not report the expected unauthenticated game state."
+            }
+            if ([string]::IsNullOrWhiteSpace($status.connectionMessage)) {
+              throw "The panel status response is missing its connection explanation."
+            }
+
+            $page = $client.GetStringAsync("http://127.0.0.1:8788/").GetAwaiter().GetResult()
+            if ($page -notmatch "Panel API online" -or $page -notmatch "connectionHint") {
+              throw "The published panel page is missing its connection-state UI."
+            }
+
+            $scriptBody = [System.Net.Http.StringContent]::new('{"path":"C:\\HeadlessSmoke\missing.cs"}', [System.Text.Encoding]::UTF8, "application/json")
+            $scriptResponse = $client.PostAsync("http://127.0.0.1:8788/api/script/start", $scriptBody).GetAwaiter().GetResult()
+            $scriptError = $scriptResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ([int]$scriptResponse.StatusCode -ne 409 -or $scriptError -notmatch "AQW is not ready") {
+              throw "The panel script API did not return the expected not-connected response: $scriptError"
+            }
+
+            $butlerBody = [System.Net.Http.StringContent]::new('{"username":"HeadlessSmokeTarget","duration":null}', [System.Text.Encoding]::UTF8, "application/json")
+            $butlerResponse = $client.PostAsync("http://127.0.0.1:8788/api/butler/start", $butlerBody).GetAwaiter().GetResult()
+            $butlerError = $butlerResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ([int]$butlerResponse.StatusCode -ne 409 -or $butlerError -notmatch "AQW is not ready") {
+              throw "The panel Butler API did not return the expected not-connected response: $butlerError"
+            }
+
+            Write-Host "Remote panel API smoke test passed."
+          }
+          finally {
+            $client.Dispose()
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              $process.WaitForExit()
+            }
+          }
+
       - name: Smoke test published Headless Skua startup
         shell: pwsh
         run: |
