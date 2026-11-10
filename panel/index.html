@@ -71,6 +71,9 @@
           <div class="stat"><span>Game world</span><strong id="worldState" class="wait">Checking…</strong></div>
           <div class="stat"><span>Character</span><strong id="characterState" class="wait">Checking…</strong></div>
           <div class="stat"><span>Server</span><strong id="serverName">—</strong></div>
+          <div class="stat"><span>Current map</span><strong id="mapName">—</strong></div>
+          <div class="stat"><span>Level</span><strong id="playerLevel">—</strong></div>
+          <div class="stat"><span>Gold</span><strong id="playerGold">—</strong></div>
           <div class="stat"><span>Script</span><strong id="scriptState">Idle</strong></div>
           <div class="stat"><span>ButlerV5</span><strong id="butlerState">Idle</strong></div>
         </div>
@@ -201,6 +204,9 @@
         byId("characterState").textContent = !status.avatarLoaded ? "Pending" : !status.playerLoaded ? "Loading" : status.alive ? "Alive" : "Not alive";
         byId("characterState").className = status.alive ? "good" : "wait";
         byId("serverName").textContent = status.server || "—";
+        byId("mapName").textContent = status.map || "—";
+        byId("playerLevel").textContent = status.level ?? "—";
+        byId("playerGold").textContent = status.gold == null ? "—" : Number(status.gold).toLocaleString();
         byId("scriptState").textContent = status.scriptRunning ? "Running" : "Idle";
         byId("scriptState").className = status.scriptRunning ? "good" : "";
         byId("butlerState").textContent = status.butlerRunning
