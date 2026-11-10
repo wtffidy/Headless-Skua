@@ -56,21 +56,19 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private static string ResolvePanelDirectory()
     {
         string? executableDirectory = Path.GetDirectoryName(Environment.ProcessPath);
-        string[] candidates = new[]
-        {
-            string.IsNullOrWhiteSpace(executableDirectory) ? null : Path.Combine(executableDirectory, "panel"),
-            Path.Combine(AppContext.BaseDirectory, "panel"),
-            Path.Combine(Environment.CurrentDirectory, "panel")
-        }
-        .Where(path => !string.IsNullOrWhiteSpace(path))
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToArray()!;
+        List<string> candidates = new();
 
-        foreach (string candidate in candidates)
+        if (!string.IsNullOrWhiteSpace(executableDirectory))
+            candidates.Add(Path.Combine(executableDirectory, "panel"));
+
+        candidates.Add(Path.Combine(AppContext.BaseDirectory, "panel"));
+        candidates.Add(Path.Combine(Environment.CurrentDirectory, "panel"));
+
+        foreach (string candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
             if (File.Exists(Path.Combine(candidate, "index.html")))
                 return candidate;
 
-        return candidates.FirstOrDefault() ?? Path.Combine(AppContext.BaseDirectory, "panel");
+        return candidates[0];
     }
 
     /// <summary>
