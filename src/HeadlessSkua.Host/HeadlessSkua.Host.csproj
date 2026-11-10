@@ -2,6 +2,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>HeadlessSkua</AssemblyName>
+    <!-- Match the vendored VibeSkua core version so scripts see the correct client version. -->
+    <InformationalVersion>2.1.2</InformationalVersion>
     <ApplicationIcon>../../HeadLessSkua.ico</ApplicationIcon>
     <RootNamespace>HeadlessSkua</RootNamespace>
     <PublishSingleFile>true</PublishSingleFile>
