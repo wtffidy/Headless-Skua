@@ -15,20 +15,20 @@ where dotnet >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] .NET 10 SDK is required.
     echo Install it from https://dotnet.microsoft.com/download/dotnet/10.0
-    exit /b 1
+    goto :failed
 )
 
 dotnet --list-sdks | findstr /B "10." >nul
 if errorlevel 1 (
     echo [ERROR] .NET 10 SDK was not found.
     echo Install it from https://dotnet.microsoft.com/download/dotnet/10.0
-    exit /b 1
+    goto :failed
 )
 
 where git >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Git is required to initialize the VibeSkua submodule.
-    exit /b 1
+    goto :failed
 )
 
 echo [1/6] Initializing VibeSkua source...
@@ -83,22 +83,17 @@ echo  ==========================================
 echo       HEADLESS SKUA BUILD COMPLETE
 echo  ==========================================
 echo.
-echo Run the headless client:
-echo   Build.bat run
-echo.
-echo Run an existing Skua script:
-echo   Build.bat run --script "C:\path\to\YourScript.cs"
-echo.
-echo Start ButlerV5 following a player:
-echo   Build.bat -butler PlayerName
-echo   Build.bat -butler PlayerName 30m
-echo   Build.bat -butler stop
+echo Starting Headless Skua...
 echo.
 
 if /I "%~1"=="run" goto :launch
 if /I "%~1"=="-butler" goto :butler
 
-exit /b 0
+goto :default_launch
+
+:default_launch
+dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run
+exit /b %errorlevel%
 
 :launch
 shift
@@ -111,15 +106,9 @@ echo Starting headless ButlerV5...
 dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- %*
 exit /b %errorlevel%
 
-:stop_butler
-if not exist "src\HeadlessSkua.Host\bin\Release\net10.0\HeadlessSkua.dll" (
-    echo [ERROR] Headless Skua has not been built yet.
-    exit /b 1
-)
-dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- -butler stop
-exit /b %errorlevel%
-
 :failed
 echo.
 echo [ERROR] Build or setup failed. Review the error above.
+echo.
+pause
 exit /b 1
