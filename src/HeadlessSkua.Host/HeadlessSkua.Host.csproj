@@ -27,4 +27,12 @@
     <MakeDir Directories="$(PublishDir)plugins" />
     <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(PublishDir)plugins" SkipUnchangedFiles="true" />
   </Target>
+
+  <Target Name="CopyRuffleRuntimeToBuildOutput" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\runtime\ruffle-host\index.html')">
+    <ItemGroup>
+      <RuffleRuntimeFiles Include="$(MSBuildProjectDirectory)\..\..\runtime\ruffle-host\**\*" />
+    </ItemGroup>
+    <MakeDir Directories="@(RuffleRuntimeFiles->'$(TargetDir)runtime\ruffle-host\%(RecursiveDir)')" />
+    <Copy SourceFiles="@(RuffleRuntimeFiles)" DestinationFiles="@(RuffleRuntimeFiles->'$(TargetDir)runtime\ruffle-host\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
