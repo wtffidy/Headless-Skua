@@ -221,7 +221,8 @@
           .join(" ");
         byId("updatedAt").textContent = `Updated ${new Date().toLocaleTimeString()}`;
         byId("startScript").disabled = !status.connected || status.scriptRunning;
-        byId("stopScript").disabled = !status.scriptRunning;
+        byId("stopScript").disabled = !status.scriptRunning || status.scriptStopping;
+        byId("stopScript").textContent = status.scriptStopping ? "Stopping…" : "Stop script";
         byId("startButler").disabled = !status.connected || status.butlerRunning || !status.butlerAvailable;
         byId("stopButler").disabled = !status.butlerRunning;
       } catch (error) {
@@ -236,6 +237,7 @@
         byId("connectionHint").textContent = "The panel cannot reach the Headless Skua control API.";
         byId("startScript").disabled = true;
         byId("stopScript").disabled = true;
+        byId("stopScript").textContent = "Stop script";
         byId("startButler").disabled = true;
         byId("stopButler").disabled = true;
       }
