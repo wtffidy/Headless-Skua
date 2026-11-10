@@ -90,14 +90,15 @@ echo Run an existing Skua script:
 echo   Build.bat run --script "C:\path\to\YourScript.cs"
 echo.
 
-if /I "%~1"=="run" (
-    shift
-    echo Starting Headless Skua...
-    dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run %*
-    exit /b %errorlevel%
-)
+if /I "%~1"=="run" goto :launch
 
 exit /b 0
+
+:launch
+shift
+echo Starting Headless Skua...
+dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run %*
+exit /b %errorlevel%
 
 :failed
 echo.
