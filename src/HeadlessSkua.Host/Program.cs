@@ -245,10 +245,19 @@ internal static class Program
                     return 4;
 
                 string? butlerTarget = GetOption(args, "--butler");
+                string? scriptPath = GetOption(args, "--script");
+                if (!string.IsNullOrWhiteSpace(butlerTarget) || !string.IsNullOrWhiteSpace(scriptPath))
+                {
+                    if (!await HeadlessLoginFlow.WaitForAutomationReadyAsync(
+                        scriptInterface,
+                        TimeSpan.FromSeconds(60),
+                        cancellationTokenSource.Token))
+                        return 4;
+                }
+
                 if (!string.IsNullOrWhiteSpace(butlerTarget))
                     return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
 
-                string? scriptPath = GetOption(args, "--script");
                 if (!string.IsNullOrWhiteSpace(scriptPath))
                 {
                     string fullScriptPath = Path.GetFullPath(scriptPath);
