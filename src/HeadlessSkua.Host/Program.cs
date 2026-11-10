@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Skua.Core.Interfaces;
 
 namespace HeadlessSkua;
 
@@ -61,11 +62,21 @@ internal static class Program
         try
         {
             await using RuffleRuntime runtime = new(runtimeDirectory);
-            runtime.HostCallReceived += (name, values) =>
-                Console.WriteLine($"[AS3 -> Host] {name}: {values.GetRawText()}");
+            using RuffleFlashUtil flash = new(runtime);
+            TaskCompletionSource swfLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            flash.FlashCall += (name, values) =>
+            {
+                Console.WriteLine($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
+
+                if (string.Equals(name, "loaded", StringComparison.OrdinalIgnoreCase))
+                    swfLoaded.TrySetResult();
+            };
 
             await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
-            Console.WriteLine("Headless game runtime started. Press Ctrl+C to stop.");
+            Console.WriteLine("Waiting for the Skua ActionScript client to initialize...");
+            await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
+            Console.WriteLine("Skua ActionScript client initialized. Press Ctrl+C to stop.");
 
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
             return 0;
