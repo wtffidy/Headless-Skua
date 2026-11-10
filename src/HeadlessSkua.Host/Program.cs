@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ namespace HeadlessSkua;
 internal static class Program
 {
     private const string Version = "0.1.0";
+    private static readonly ConcurrentDictionary<string, byte> LoggedPacketTypes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Starts the Headless Skua host or handles a command-line information request.
@@ -132,6 +134,19 @@ internal static class Program
             flash.FlashCall += (name, values) =>
             {
                 sessionState.Observe(name, values);
+
+                if (name.Equals("packetFromServer", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("packet", StringComparison.OrdinalIgnoreCase))
+                {
+                    string direction = name.Equals("packetFromServer", StringComparison.OrdinalIgnoreCase) ? "server" : "client";
+                    foreach (string packet in values.OfType<string>())
+                    {
+                        string? packetType = GetPacketType(packet);
+                        if (!string.IsNullOrWhiteSpace(packetType)
+                            && LoggedPacketTypes.TryAdd($"{direction}:{packetType}", 0))
+                            HeadlessConsole.Debug($"AQW {direction} packet type: {packetType} ({System.Text.Encoding.UTF8.GetByteCount(packet)} bytes).");
+                    }
+                }
                 if ((string.Equals(name, "packetFromServer", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(name, "pext", StringComparison.OrdinalIgnoreCase))
                     && values.OfType<string>().Any(value => value.Contains("loginResponse", StringComparison.OrdinalIgnoreCase)))
@@ -306,6 +321,24 @@ internal static class Program
         {
             Console.CancelKeyPress -= cancelHandler;
         }
+    }
+
+    /// <summary>
+    /// Extracts the SmartFox packet command without exposing packet contents or account data.
+    /// </summary>
+    /// <param name="packet">The packet trace emitted by the AQW client.</param>
+    /// <returns>The packet command name, or null when it cannot be identified.</returns>
+    private static string? GetPacketType(string packet)
+    {
+        int marker = packet.IndexOf("%xt%", StringComparison.OrdinalIgnoreCase);
+        if (marker >= 0)
+        {
+            string[] fields = packet[(marker + 1)..].Split('%');
+            return fields.Length > 1 && !string.IsNullOrWhiteSpace(fields[1]) ? fields[1].Trim() : null;
+        }
+
+        int separator = packet.IndexOf('%');
+        return separator > 0 ? packet[..separator].Trim() : null;
     }
 
     /// <summary>
