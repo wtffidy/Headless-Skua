@@ -85,7 +85,7 @@ internal static class Program
     /// <returns>A process exit code indicating whether the session started successfully.</returns>
     private static async Task<int> RunAsync(string[] args)
     {
-        string runtimeDirectory = GetOption(args, "--runtime-dir") ?? Path.Combine("runtime", "ruffle-host");
+        string runtimeDirectory = GetOption(args, "--runtime-dir") ?? GetDefaultRuntimeDirectory();
         string swfPath = GetOption(args, "--swf") ?? Path.Combine(runtimeDirectory, "game", "skua.swf");
         using CancellationTokenSource cancellationTokenSource = new();
 
@@ -256,6 +256,19 @@ internal static class Program
     }
 
     /// <summary>
+    /// Resolves the bundled Ruffle runtime beside the executable, with a repository-root fallback for development runs.
+    /// </summary>
+    /// <returns>The available runtime directory.</returns>
+    private static string GetDefaultRuntimeDirectory()
+    {
+        string applicationRuntime = Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host");
+        if (Directory.Exists(applicationRuntime))
+            return applicationRuntime;
+
+        return Path.Combine(Environment.CurrentDirectory, "runtime", "ruffle-host");
+    }
+
+    /// <summary>
     /// Reads and validates the optional remote panel port.
     /// </summary>
     /// <param name="args">Command-line arguments.</param>
@@ -322,8 +335,10 @@ internal static class Program
         Console.WriteLine($"Architecture     : {RuntimeInformation.ProcessArchitecture}");
         Console.WriteLine($".NET runtime     : {Environment.Version}");
         Console.WriteLine($"Base directory   : {AppContext.BaseDirectory}");
-        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host", "ruffle", "ruffle.js"))}");
-        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host", "game", "skua.swf"))}");
+        string runtimeDirectory = GetDefaultRuntimeDirectory();
+        Console.WriteLine($"Ruffle directory : {runtimeDirectory}");
+        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine(runtimeDirectory, "ruffle", "ruffle.js"))}");
+        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine(runtimeDirectory, "game", "skua.swf"))}");
         Console.WriteLine($"Remote panel     : {File.Exists(Path.Combine(AppContext.BaseDirectory, "panel", "index.html"))}");
         Console.WriteLine($"Playwright Node  : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "node", "win32_x64", "node.exe"))}");
         Console.WriteLine($"Playwright CLI   : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "package", "cli.js"))}");
