@@ -87,7 +87,7 @@ internal sealed class HeadlessSessionState
                 || !bool.TryParse(data[2].GetString(), out bool accepted))
                 return;
 
-            string? account = accepted && data.GetArrayLength() > 3 ? data[3].GetString()?.Trim() : null;
+            string? account = accepted && data.GetArrayLength() > 4 ? data[4].GetString()?.Trim() : null;
             lock (_sync)
             {
                 _loginAccepted = accepted;
