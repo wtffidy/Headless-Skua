@@ -1,5 +1,6 @@
 using Skua.Core.Interfaces;
 using Skua.Core.Models;
+using Skua.Headless.UI;
 
 namespace HeadlessSkua;
 
@@ -51,7 +52,14 @@ internal sealed class HeadlessLogService : ILogService
         if (string.IsNullOrWhiteSpace(message))
             return;
 
-        Console.WriteLine($"[{type}] {message}");
+        LogLevel level = type switch
+        {
+            LogType.Debug => LogLevel.Debug,
+            LogType.Script => LogLevel.Info,
+            LogType.Flash => LogLevel.Warn,
+            _ => LogLevel.Info
+        };
+        HeadlessConsole.Log(level, $"[{type}] {message}");
 
         lock (_sync)
         {
