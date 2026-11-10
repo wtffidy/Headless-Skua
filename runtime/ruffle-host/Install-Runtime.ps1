@@ -83,20 +83,167 @@ function Build-HeadlessSkuaSwf {
 
     $patchedModulesPath = Join-Path $patchedSourceRoot "skua\module\Modules.as"
     $patchedMainPath = Join-Path $patchedSourceRoot "skua\Main.as"
+    $patchedWorldPath = Join-Path $patchedSourceRoot "skua\api\World.as"
+    $patchedCombatPath = Join-Path $patchedSourceRoot "skua\api\Combat.as"
     $modulesContent = Get-Content -LiteralPath $patchedModulesPath -Raw
     $mainContent = Get-Content -LiteralPath $patchedMainPath -Raw
+    $worldContent = Get-Content -LiteralPath $patchedWorldPath -Raw
+    $combatContent = Get-Content -LiteralPath $patchedCombatPath -Raw
+
+    $moduleTogglePattern = 'module\.onToggle\(Main\.instance\.getGame\(\)\);'
+    $moduleToggleReplacement = @'
+var game:* = Main.instance.getGame();
+                if (isGameReady(game)) {
+                    module.onToggle(game);
+                }
+'@.Trim()
+    $patchedModules = [regex]::Replace(
+        $modulesContent,
+        $moduleTogglePattern,
+        $moduleToggleReplacement,
+        [System.Text.RegularExpressions.RegexOptions]::None,
+        [TimeSpan]::FromSeconds(2)
+    )
+
+    if ([regex]::Matches($modulesContent, $moduleTogglePattern).Count -ne 2) {
+        Write-Warning "The Skua module toggle callbacks did not match the expected source; using the existing compiled client."
+        return $false
+    }
+
+    $moduleReadyHelper = @'
+    private static function isGameReady(game:*):Boolean {
+        return game != null && game.world != null && game.world.avatars != null
+            && game.ui != null && game.ui.ModalStack != null;
+    }
+
+'@
+    $frameHandlerAnchor = '    public static function handleFrame(e:Event):void {'
+    if (-not $patchedModules.Contains($frameHandlerAnchor)) {
+        Write-Warning "The Skua module frame handler was not found; using the existing compiled client."
+        return $false
+    }
+    $patchedModules = $patchedModules.Replace($frameHandlerAnchor, $moduleReadyHelper + $frameHandlerAnchor)
 
     $moduleGuardPattern = 'if\s*\(game\s*==\s*null\)\s*\{\s*return;\s*\}'
     $patchedModules = [regex]::Replace(
-        $modulesContent,
+        $patchedModules,
         $moduleGuardPattern,
-        'if (game == null || game.ui == null || game.ui.ModalStack == null) { return; }',
+        'if (!isGameReady(game)) { return; }',
         [System.Text.RegularExpressions.RegexOptions]::None,
         [TimeSpan]::FromSeconds(2)
     )
 
     if ([string]::Equals($modulesContent, $patchedModules, [StringComparison]::Ordinal)) {
         Write-Warning "The Skua module frame guard did not match the expected source; using the existing compiled client."
+        return $false
+    }
+
+    $worldContentBeforePatch = $worldContent
+    $worldContent = $worldContent.Replace(
+        @'
+    public static function skipCutscenes():void {
+        while (Main.instance.game.mcExtSWF.numChildren > 0) {
+'@,
+        @'
+    public static function skipCutscenes():void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        if (game == null || game.mcExtSWF == null) return;
+        while (game.mcExtSWF.numChildren > 0) {
+'@
+    )
+    $worldContent = $worldContent.Replace(
+        '        Main.instance.game.mcExtSWF.removeChildAt(0);',
+        '        game.mcExtSWF.removeChildAt(0);'
+    )
+    $worldContent = $worldContent.Replace(
+        '        Main.instance.game.showInterface();',
+        '        game.showInterface();'
+    )
+    $worldContent = $worldContent.Replace(
+        @'
+    public static function hidePlayers(enabled:Boolean):void {
+        var world:* = Main.instance.game.world;
+'@,
+        @'
+    public static function hidePlayers(enabled:Boolean):void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        if (world == null || world.avatars == null) return;
+'@
+    )
+    $worldContent = $worldContent.Replace(
+        @'
+    public static function disableFX(enabled:Boolean):void {
+        if (!_fxLastOpt && enabled) {
+'@,
+        @'
+    public static function disableFX(enabled:Boolean):void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        if (world == null || world.avatars == null) return;
+        if (!_fxLastOpt && enabled) {
+'@
+    )
+    $worldContent = $worldContent.Replace(
+        'for each (var avatar:* in Main.instance.game.world.avatars)',
+        'for each (var avatar:* in world.avatars)'
+    )
+    $worldContent = $worldContent.Replace(
+        @'
+    public static function killLag(enable:Boolean):void {
+        Main.instance.game.world.visible = !enable;
+'@,
+        @'
+    public static function killLag(enable:Boolean):void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        if (game == null || game.world == null) return;
+        game.world.visible = !enable;
+'@
+    )
+
+    $combatContentBeforePatch = $combatContent
+    $combatContent = $combatContent.Replace(
+        @'
+    public static function magnetize():void {
+        var target:* = Main.instance.game.world.myAvatar.target;
+'@,
+        @'
+    public static function magnetize():void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        if (world == null || world.myAvatar == null) return;
+        var target:* = world.myAvatar.target;
+'@
+    )
+    $combatContent = $combatContent.Replace(
+        '            target.pMC.x = Main.instance.game.world.myAvatar.pMC.x;',
+        '            target.pMC.x = world.myAvatar.pMC.x;'
+    )
+    $combatContent = $combatContent.Replace(
+        '            target.pMC.y = Main.instance.game.world.myAvatar.pMC.y;',
+        '            target.pMC.y = world.myAvatar.pMC.y;'
+    )
+    $combatContent = $combatContent.Replace(
+        @'
+    public static function infiniteRange():void {
+        var active:Array = Main.instance.game.world.actions.active;
+        for (var i:int = 0; i < 6; i++) {
+            active[i].range = 20000;
+'@,
+        @'
+    public static function infiniteRange():void {
+        var game:* = Main.instance != null ? Main.instance.game : null;
+        var world:* = game != null ? game.world : null;
+        if (world == null || world.actions == null || world.actions.active == null) return;
+        var active:Array = world.actions.active;
+        for (var i:int = 0; i < Math.min(6, active.length); i++) {
+            if (active[i] != null) active[i].range = 20000;
+'@
+    )
+
+    if ([string]::Equals($worldContentBeforePatch, $worldContent, [StringComparison]::Ordinal)
+        -or [string]::Equals($combatContentBeforePatch, $combatContent, [StringComparison]::Ordinal)) {
+        Write-Warning "The Skua gameplay guards did not match the expected source; using the existing compiled client."
         return $false
     }
 
@@ -130,6 +277,8 @@ function Build-HeadlessSkuaSwf {
 
     Set-Content -LiteralPath $patchedModulesPath -Value $patchedModules -Encoding utf8
     Set-Content -LiteralPath $patchedMainPath -Value $mainContent -Encoding utf8
+    Set-Content -LiteralPath $patchedWorldPath -Value $worldContent -Encoding utf8
+    Set-Content -LiteralPath $patchedCombatPath -Value $combatContent -Encoding utf8
 
     $compilerDirectory = Split-Path -Parent $CompilerPath
     if ([string]::IsNullOrWhiteSpace($env:FLEX_HOME)) {
