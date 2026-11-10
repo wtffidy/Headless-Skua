@@ -44,3 +44,44 @@ jobs:
 
       - name: Check host diagnostics
         run: dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- doctor
+
+      - name: Smoke test headless Skua startup
+        shell: pwsh
+        run: |
+          $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.out.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.err.log"
+          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run")
+          $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(90)
+            $started = $false
+
+            while ([DateTime]::UtcNow -lt $deadline) {
+              if (Test-Path $stdout) {
+                $output = Get-Content $stdout -Raw
+                if ($output -match "Skua ActionScript client initialized") {
+                  $started = $true
+                  break
+                }
+              }
+
+              if ($process.HasExited) {
+                break
+              }
+
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $started) {
+              if (Test-Path $stdout) { Get-Content $stdout }
+              if (Test-Path $stderr) { Get-Content $stderr }
+              throw "The Skua SWF did not initialize in headless Chromium within 90 seconds."
+            }
+          }
+          finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              $process.WaitForExit()
+            }
+          }
