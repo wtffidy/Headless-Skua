@@ -125,10 +125,13 @@ internal static class Program
         {
             await using RuffleRuntime runtime = new(runtimeDirectory);
             using RuffleFlashUtil flash = new(runtime);
+            HeadlessSessionState sessionState = new();
             TaskCompletionSource swfLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             flash.FlashCall += (name, values) =>
             {
+                sessionState.Observe(name, values);
+
                 if (!HeadlessConsole.Quiet)
                     HeadlessConsole.Debug($"[AS3 -> Host] {name}: {string.Join(", ", values.Select(value => value?.ToString() ?? "null"))}");
 
@@ -194,6 +197,7 @@ internal static class Program
                         scriptInterface,
                         scriptManager,
                         pluginManager,
+                        sessionState,
                         serviceProvider.GetRequiredService<HeadlessLogService>(),
                         args.Contains("--remote", StringComparer.OrdinalIgnoreCase),
                         GetPanelPort(args));
