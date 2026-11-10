@@ -207,6 +207,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             gold = snapshot.Gold,
             scriptRunning = _scriptManager.ScriptRunning,
             scriptStopping = IsScriptStopping(),
+            scriptDiagnostics = GetScriptDiagnostics(),
             butlerRunning = _butlerTask is { IsCompleted: false },
             butlerAvailable = butlerBlockReason is null,
             butlerBlockReason
@@ -494,6 +495,46 @@ internal sealed class RemotePanelHost : IAsyncDisposable
 
         Trace.Listeners.Add(new ConsoleTraceListener());
         Trace.AutoFlush = true;
+    }
+
+    /// <summary>
+    /// Captures the active VibeSkua script thread and its current managed stack.
+    /// </summary>
+    /// <returns>Current worker-thread diagnostics, or a clear unavailable state.</returns>
+    private object GetScriptDiagnostics()
+    {
+        if (!_scriptManager.ScriptRunning)
+            return new { threadState = "Stopped", threadId = (int?)null, stackTrace = (string?)null };
+
+        try
+        {
+            FieldInfo? threadField = _scriptManager.GetType().GetField(
+                "_currentScriptThread",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Thread? scriptThread = threadField?.GetValue(_scriptManager) as Thread;
+            if (scriptThread is null)
+                return new { threadState = "Starting", threadId = (int?)null, stackTrace = "VibeSkua has not published its script worker thread yet." };
+
+            string? stackTrace = scriptThread.StackTrace;
+            if (string.IsNullOrWhiteSpace(stackTrace))
+                stackTrace = "The worker thread has no readable managed stack at this instant.";
+
+            return new
+            {
+                threadState = scriptThread.ThreadState.ToString(),
+                threadId = (int?)scriptThread.ManagedThreadId,
+                stackTrace = stackTrace.Length > 12_000 ? stackTrace[..12_000] : stackTrace
+            };
+        }
+        catch (Exception exception)
+        {
+            return new
+            {
+                threadState = "Unavailable",
+                threadId = (int?)null,
+                stackTrace = $"Could not inspect the VibeSkua script worker: {exception.GetType().Name}: {exception.Message}"
+            };
+        }
     }
 
     /// <summary>
