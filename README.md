@@ -14,7 +14,7 @@ On Windows, run:
 Build.bat
 ```
 
-The build script restores and builds the solution, installs Chromium and Ruffle, then publishes a self-contained Windows x64 application to:
+The build script restores and builds the solution, installs Chromium and Ruffle, then publishes the .NET host as one self-contained Windows x64 executable. The output folder contains the executable plus the external Ruffle/game assets and bundled plugins:
 
 ```
 Build\
