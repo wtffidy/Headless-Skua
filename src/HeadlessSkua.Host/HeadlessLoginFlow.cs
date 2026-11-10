@@ -88,6 +88,7 @@ internal static class HeadlessLoginFlow
         HeadlessConsole.Info($"Selected server target: {selectedServer.Name} ({selectedServer.IP}).");
 
         int serverPort = selectedServer.Port > 0 ? selectedServer.Port : 5588;
+        Stopwatch serverConnectionTimer = Stopwatch.StartNew();
         HeadlessConsole.Info($"Preparing the {selectedServer.Name} connection ({selectedServer.IP}:{serverPort})...");
 
         // AQW requires the server's XML socket policy before opening its game connection.
@@ -97,7 +98,7 @@ internal static class HeadlessLoginFlow
             bot.Flash.Call("loadPolicyFile", selectedServer.IP, serverPort);
             HeadlessConsole.Debug("XML socket policy request queued.");
             bot.Flash.Call("killLoginModals");
-            HeadlessConsole.Debug("Login modals cleared.");
+            HeadlessConsole.Debug($"Server policy and login-modal preparation completed in {serverConnectionTimer.Elapsed.TotalSeconds:F2}s.");
         }
         catch (Exception exception)
         {
@@ -144,7 +145,7 @@ internal static class HeadlessLoginFlow
             HeadlessConsole.Debug($"Direct server bridge was unavailable: {exception.Message}");
         }
         if (selectedInClient)
-            HeadlessConsole.Info($"Server connection request queued for {selectedServer.Name}.");
+            HeadlessConsole.Info($"Server connection request queued for {selectedServer.Name} after {serverConnectionTimer.Elapsed.TotalSeconds:F2}s of connection setup.");
         else
         {
             HeadlessConsole.Warn("Skua's direct server bridge was unavailable. Trying the AQW server-list click...");
@@ -186,6 +187,7 @@ internal static class HeadlessLoginFlow
         bot.Servers.LastName = selectedServer.Name;
         HeadlessConsole.Info($"Connection request accepted. Waiting for {selectedServer.Name} to finish loading...");
         bool connected = await WaitForWorldLoadedAsync(bot, sessionState, TimeSpan.FromSeconds(60), cancellationToken);
+        HeadlessConsole.Info($"Selected-server connection phase completed in {serverConnectionTimer.Elapsed.TotalSeconds:F1}s.");
         if (!connected)
         {
             string? modalMessage = GetActiveModalMessage(bot);
