@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace HeadlessSkua;
 
 /// <summary>
@@ -39,12 +41,15 @@ internal sealed class HeadlessSessionState
             return;
         }
 
-        // Some Ruffle builds forward the parsed extension response through pext
-        // without exposing the original packet as a separate callback argument.
         if (string.Equals(function, "pext", StringComparison.OrdinalIgnoreCase))
             foreach (object? argument in arguments)
                 if (argument is string json)
-                    ObserveExtensionResponse(json);
+                {
+                    if (json.Contains("loginResponse%", StringComparison.OrdinalIgnoreCase))
+                        ObservePacket(json);
+                    else
+                        ObserveExtensionResponse(json);
+                }
     }
 
     /// <summary>
@@ -70,57 +75,117 @@ internal sealed class HeadlessSessionState
     }
 
     /// <summary>
-    /// Reads the parsed SmartFox extension response as a fallback when Ruffle only
-    /// exposes the response through the pext callback.
+    /// Reads a parsed SmartFox extension response. AQW/Ruffle may serialize packet fields
+    /// as strings, booleans, or numbers, so parsing must not assume every field is a string.
     /// </summary>
     /// <param name="json">The serialized extension response.</param>
     private void ObserveExtensionResponse(string json)
     {
         try
         {
-            using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(json);
-            if (!document.RootElement.TryGetProperty("params", out System.Text.Json.JsonElement parameters)
-                || !parameters.TryGetProperty("dataObj", out System.Text.Json.JsonElement data)
-                || data.ValueKind != System.Text.Json.JsonValueKind.Array
-                || data.GetArrayLength() < 4
-                || !string.Equals(data[0].GetString(), "loginResponse", StringComparison.OrdinalIgnoreCase)
-                || !bool.TryParse(data[2].GetString(), out bool accepted))
-                return;
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
 
-            string? account = accepted && data.GetArrayLength() > 4 ? data[4].GetString()?.Trim() : null;
-            lock (_sync)
+            if (root.ValueKind == JsonValueKind.String)
             {
-                _loginAccepted = accepted;
-                _account = string.IsNullOrWhiteSpace(account) ? null : account;
+                ObservePacket(root.GetString() ?? string.Empty);
+                return;
             }
+
+            JsonElement data;
+            if (TryGetPropertyIgnoreCase(root, "params", out JsonElement parameters)
+                && TryGetPropertyIgnoreCase(parameters, "dataObj", out data))
+            {
+                ObserveLoginResponse(data);
+                return;
+            }
+
+            if (TryGetPropertyIgnoreCase(root, "dataObj", out data) || root.ValueKind == JsonValueKind.Array)
+                ObserveLoginResponse(root.ValueKind == JsonValueKind.Array ? root : data);
         }
-        catch (System.Text.Json.JsonException)
+        catch (JsonException)
         {
+            // Non-JSON extension events are not login responses.
         }
     }
 
     /// <summary>
-    /// Parses AQW's %xt%loginResponse packet without depending on avatar initialization.
+    /// Extracts AQW's login response from the SmartFox dataObj array.
+    /// </summary>
+    /// <param name="data">The extension response data.</param>
+    private void ObserveLoginResponse(JsonElement data)
+    {
+        if (data.ValueKind != JsonValueKind.Array
+            || data.GetArrayLength() < 5
+            || !string.Equals(GetScalarText(data[0]), "loginResponse", StringComparison.OrdinalIgnoreCase)
+            || !bool.TryParse(GetScalarText(data[2]), out bool accepted))
+            return;
+
+        string? account = accepted ? GetScalarText(data[4])?.Trim() : null;
+        SetLoginState(accepted, account);
+    }
+
+    /// <summary>
+    /// Parses AQW's raw loginResponse packet independently of avatar initialization.
+    /// Supports both full %xt% packets and the shortened loginResponse% form.
     /// </summary>
     /// <param name="packet">The raw packet received from AQW.</param>
     private void ObservePacket(string packet)
     {
-        int responseIndex = packet.IndexOf("%xt%loginResponse%", StringComparison.OrdinalIgnoreCase);
+        int responseIndex = packet.IndexOf("loginResponse%", StringComparison.OrdinalIgnoreCase);
         if (responseIndex < 0)
             return;
 
         string[] fields = packet[responseIndex..].Split('%');
-        if (fields.Length < 7 || !bool.TryParse(fields[4], out bool accepted))
+        if (fields.Length < 5 || !bool.TryParse(fields[2], out bool accepted))
             return;
 
-        string? account = accepted && !string.IsNullOrWhiteSpace(fields[6])
-            ? fields[6].Trim()
-            : null;
+        string? account = accepted ? fields[4].Trim() : null;
+        SetLoginState(accepted, account);
+    }
 
+    /// <summary>
+    /// Stores an accepted or rejected login response atomically.
+    /// </summary>
+    /// <param name="accepted">Whether AQW accepted the login.</param>
+    /// <param name="account">The account name returned by AQW.</param>
+    private void SetLoginState(bool accepted, string? account)
+    {
         lock (_sync)
         {
             _loginAccepted = accepted;
-            _account = account;
+            _account = string.IsNullOrWhiteSpace(account) ? null : account;
         }
+    }
+
+    /// <summary>
+    /// Reads a JSON object property without depending on the serializer's property casing.
+    /// </summary>
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+            foreach (JsonProperty property in element.EnumerateObject())
+                if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Converts a scalar JSON value into text without throwing on boolean or numeric fields.
+    /// </summary>
+    private static string? GetScalarText(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.Object or JsonValueKind.Array => null,
+            _ => value.ToString()
+        };
     }
 }
