@@ -20,6 +20,22 @@
     <ProjectReference Include="../../vendor/VibeSkua/Skua.Plugin.ButlerV5/Skua.Plugin.ButlerV5.csproj" />
   </ItemGroup>
 
+  <Target Name="CopyPanelAssetsToBuildOutput" AfterTargets="Build">
+    <ItemGroup>
+      <PanelFiles Include="$(MSBuildProjectDirectory)\..\..\panel\**\*" />
+    </ItemGroup>
+    <MakeDir Directories="@(PanelFiles->'$(TargetDir)panel\%(RecursiveDir)')" />
+    <Copy SourceFiles="@(PanelFiles)" DestinationFiles="@(PanelFiles->'$(TargetDir)panel\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyPanelAssetsToPublishOutput" AfterTargets="Publish">
+    <ItemGroup>
+      <PanelPublishFiles Include="$(MSBuildProjectDirectory)\..\..\panel\**\*" />
+    </ItemGroup>
+    <MakeDir Directories="@(PanelPublishFiles->'$(PublishDir)panel\%(RecursiveDir)')" />
+    <Copy SourceFiles="@(PanelPublishFiles)" DestinationFiles="@(PanelPublishFiles->'$(PublishDir)panel\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
   <Target Name="CopyBundledPlugins" AfterTargets="Build">
     <MakeDir Directories="$(TargetDir)plugins" />
     <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(TargetDir)plugins" SkipUnchangedFiles="true" />
