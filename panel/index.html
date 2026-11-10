@@ -13,6 +13,44 @@
     .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:15px}.card{background:linear-gradient(145deg,#171f2dee,#111722f5);border:1px solid var(--line);border-radius:16px;padding:19px;box-shadow:0 12px 35px #0002;min-width:0}.status{grid-column:span 12}.half{grid-column:span 6}.logs{grid-column:span 12}.cardhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.card h2{font-size:14px;margin:0;font-weight:760;letter-spacing:.02em}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stat{border:1px solid #2b3548;background:#121a27;border-radius:12px;padding:13px}.stat span{display:block;color:var(--muted);font-size:11px;margin-bottom:7px}.stat strong{font-size:15px;font-weight:720;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stat strong.good{color:var(--green)}.stat strong.wait{color:#f7d68a}.form{display:flex;flex-direction:column;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:11px;color:var(--muted)}.actions select{flex:1;min-width:0}input,select{width:100%;min-width:0;background:#0c121d;color:#e8eaf4;border:1px solid #344056;border-radius:9px;padding:11px 12px;outline:none}input:focus,select:focus{border-color:var(--purple);box-shadow:0 0 0 3px #b39aff1c}input::placeholder{color:#68758a}select option{background:#0c121d;color:#e8eaf4}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}.hint{font-size:11px;color:var(--muted);line-height:1.5;margin:0}.logs-head{display:flex;align-items:center;gap:7px}.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab{padding:7px 10px;font-size:11px;background:#1a2231;border:1px solid #344056;color:#b8c2d5;border-radius:8px}.tab.active{background:#332a50;border-color:#7763a8;color:#f0eaff}.logview{height:280px;overflow:auto;background:#090e17;border:1px solid #273348;border-radius:10px;padding:12px;color:#c4cde0;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.empty{color:#647087}.footer{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;color:#748096;font-size:10px}.toast{position:fixed;right:22px;bottom:22px;max-width:min(420px,calc(100vw - 44px));padding:12px 15px;border-radius:11px;border:1px solid #52647b;background:#182333;color:#e7edf9;box-shadow:0 14px 45px #0008;opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s;font-size:12px}.toast.show{opacity:1;transform:translateY(0)}.toast.error{border-color:#85465a;color:#ffdce4}.warning{border:1px solid #685637;background:#302719;color:#f4d99f;border-radius:10px;padding:11px 13px;font-size:11px;line-height:1.5;margin-top:15px}.status-hint{margin-top:12px;padding:10px 12px;border:1px solid #2b3548;background:#101824;border-radius:10px;line-height:1.55}
     @media(max-width:760px){.shell{padding:18px 13px 34px}.half{grid-column:span 12}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.top{align-items:flex-start}.connection{padding-top:7px}.card{padding:16px}.logview{height:240px}}
     @media(max-width:420px){.brand h1{font-size:16px}.brand p{font-size:10px}.mark{width:39px;height:39px}.connection{font-size:10px}}
+
+    .stats{grid-template-columns:repeat(6,minmax(0,1fr))}
+    .script-selection{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #344056;background:#0c121d;border-radius:11px;padding:12px}
+    .script-selection-info{min-width:0;display:flex;flex-direction:column;gap:5px}
+    .script-selection-info strong{font-size:12px;overflow-wrap:anywhere}
+    .script-selection-info span{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+    .explorer-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:22px;background:#050811c9;backdrop-filter:blur(8px)}
+    .explorer-backdrop[hidden]{display:none}
+    .explorer{width:min(860px,100%);height:min(650px,calc(100vh - 44px));display:flex;flex-direction:column;overflow:hidden;background:#111925;border:1px solid #354258;border-radius:17px;box-shadow:0 28px 90px #000b}
+    .explorer-header,.explorer-toolbar,.explorer-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 17px;border-bottom:1px solid #293548}
+    .explorer-header h2{font-size:17px;margin:5px 0 0}
+    .explorer-close{padding:7px 10px}
+    .explorer-toolbar{justify-content:flex-start;background:#141e2c}
+    .explorer-breadcrumb{display:flex;align-items:center;gap:7px;flex:1;min-width:0;overflow:auto;white-space:nowrap}
+    .breadcrumb-item{padding:6px 8px;background:transparent;border:0;color:#cdd7e7;font-size:11px}
+    .breadcrumb-separator{color:#68758a}
+    .explorer-body{display:grid;grid-template-columns:190px minmax(0,1fr);flex:1;min-height:0}
+    .explorer-sidebar{padding:15px 12px;background:#0e1622;border-right:1px solid #293548}
+    .explorer-side-label{padding:0 9px 10px;color:#74839a;font-size:10px;text-transform:uppercase;letter-spacing:.12em}
+    .explorer-location{width:100%;display:flex;align-items:center;gap:9px;text-align:left;padding:10px;border:1px solid #57487b;background:#28223e}
+    .explorer-sidebar p{font-size:10px;line-height:1.5;color:#74839a;padding:9px}
+    .explorer-list-wrap{display:flex;flex-direction:column;min-width:0;min-height:0}
+    .explorer-list-head{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;padding:11px 18px;color:#74839a;border-bottom:1px solid #293548;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+    .explorer-list{padding:7px;overflow:auto;flex:1}
+    .explorer-entry{width:100%;display:grid;grid-template-columns:28px minmax(0,1fr) 110px;align-items:center;gap:8px;padding:10px 12px;margin:1px 0;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;color:#e2e9f4;font-size:12px;font-weight:500;transform:none}
+    .explorer-entry:hover{background:#1b293a;border-color:#31445e;transform:none}
+    .explorer-entry.selected{background:#30284a;border-color:#806bb1}
+    .explorer-entry-icon{font-size:15px}
+    .explorer-entry-name{overflow-wrap:anywhere}
+    .explorer-entry-type{font-size:10px;color:#8290a5}
+    .explorer-empty{padding:26px 18px;color:#8390a5;font-size:12px;line-height:1.6}
+    .explorer-footer{border-top:1px solid #293548;border-bottom:0;background:#141e2c}
+    .explorer-selected{min-width:0;display:flex;flex-direction:column;gap:4px}
+    .explorer-selected span{font-size:9px;color:#74839a;text-transform:uppercase;letter-spacing:.12em}
+    .explorer-selected strong{font-size:11px;overflow-wrap:anywhere}
+    @media(max-width:900px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.explorer-body{grid-template-columns:130px minmax(0,1fr)}.explorer-sidebar{padding:12px 7px}.explorer-sidebar p{padding:5px}.explorer-list-head,.explorer-entry{grid-template-columns:24px minmax(0,1fr) 78px}.explorer-entry{padding:9px 6px}.script-selection{align-items:stretch;flex-direction:column}}
+    @media(max-width:520px){.explorer-backdrop{padding:8px}.explorer{height:calc(100vh - 16px);border-radius:12px}.explorer-body{grid-template-columns:1fr}.explorer-sidebar{display:none}.explorer-toolbar,.explorer-header,.explorer-footer{padding:10px}.explorer-footer{align-items:stretch;flex-direction:column}.explorer-list-head{grid-template-columns:minmax(0,1fr) 80px}.explorer-entry{grid-template-columns:24px minmax(0,1fr) 80px}}
   </style>
 </head>
 <body>
@@ -29,7 +67,9 @@
       <article class="card status">
         <div class="cardhead"><div><div class="eyebrow">Live session</div><h2 style="margin-top:5px">Runtime overview</h2></div><span class="eyebrow" id="updatedAt">Waiting for status</span></div>
         <div class="stats">
-          <div class="stat"><span>Game connection</span><strong id="runtimeState" class="wait">Checking…</strong></div>
+          <div class="stat"><span>AQW login</span><strong id="loginState" class="wait">Checking…</strong></div>
+          <div class="stat"><span>Game world</span><strong id="worldState" class="wait">Checking…</strong></div>
+          <div class="stat"><span>Character</span><strong id="characterState" class="wait">Checking…</strong></div>
           <div class="stat"><span>Server</span><strong id="serverName">—</strong></div>
           <div class="stat"><span>Script</span><strong id="scriptState">Idle</strong></div>
           <div class="stat"><span>ButlerV5</span><strong id="butlerState">Idle</strong></div>
@@ -42,12 +82,20 @@
         <div class="cardhead"><div><div class="eyebrow">Automation</div><h2 style="margin-top:5px">Run a Skua script</h2></div></div>
         <form class="form" id="scriptForm">
           <div class="field">
-            <label for="scriptPicker">Choose an installed Skua script</label>
-            <div class="actions"><select id="scriptPicker"><option value="">Loading scripts…</option></select><button class="secondary" id="refreshScripts" type="button">Refresh</button></div>
-            <p class="hint" id="scriptsHint">Reading the Headless Skua computer's VibeSkua Scripts folder…</p>
+            <label>Selected script</label>
+            <div class="script-selection">
+              <div class="script-selection-info">
+                <strong id="scriptSelectionName">No script selected</strong>
+                <span id="scriptSelectionPath">Browse the VibeSkua Scripts folder to choose a .cs file.</span>
+              </div>
+              <div class="actions">
+                <button class="secondary" id="browseScripts" type="button">Browse scripts…</button>
+                <button class="secondary" id="clearScript" type="button">Clear</button>
+              </div>
+            </div>
+            <input id="scriptPath" type="hidden">
+            <p class="hint" id="scriptsHint">The explorer shows folders and C# scripts installed on the Headless Skua computer.</p>
           </div>
-          <div class="field"><label for="scriptPath">Or enter a script path on the Headless Skua host</label><input id="scriptPath" autocomplete="off" placeholder="C:\Skua\Scripts\MyScript.cs" required></div>
-          <p class="hint">The file must already exist on the computer running Headless Skua. This sends a path to the host; it does not upload the file.</p>
           <div class="actions"><button id="startScript" type="submit">Start script</button><button class="danger" id="stopScript" type="button">Stop script</button></div>
         </form>
       </article>
@@ -69,6 +117,37 @@
       </article>
     </section>
   </main>
+  <div class="explorer-backdrop" id="explorerBackdrop" hidden>
+    <section class="explorer" role="dialog" aria-modal="true" aria-labelledby="explorerTitle">
+      <header class="explorer-header">
+        <div><div class="eyebrow">VibeSkua · Scripts</div><h2 id="explorerTitle">Choose a script</h2></div>
+        <button class="secondary explorer-close" id="closeExplorer" type="button" aria-label="Close explorer">✕</button>
+      </header>
+      <div class="explorer-toolbar">
+        <button class="secondary" id="explorerUp" type="button" disabled>↑ Up</button>
+        <div class="explorer-breadcrumb" id="explorerBreadcrumb"></div>
+        <button class="secondary" id="explorerRefresh" type="button">Refresh</button>
+      </div>
+      <div class="explorer-body">
+        <aside class="explorer-sidebar">
+          <div class="explorer-side-label">Locations</div>
+          <button class="explorer-location active" id="explorerRoot" type="button"><span>📁</span> Scripts</button>
+          <p>Only the VibeSkua Scripts folder and its subfolders are shown.</p>
+        </aside>
+        <div class="explorer-list-wrap">
+          <div class="explorer-list-head"><span>Name</span><span>Type</span></div>
+          <div class="explorer-list" id="explorerList" aria-live="polite"><div class="explorer-empty">Open the explorer to browse scripts.</div></div>
+        </div>
+      </div>
+      <footer class="explorer-footer">
+        <div class="explorer-selected"><span>Selected</span><strong id="explorerSelected">Nothing selected</strong></div>
+        <div class="actions">
+          <button class="secondary" id="cancelExplorer" type="button">Cancel</button>
+          <button id="useExplorerSelection" type="button" disabled>Use this script</button>
+        </div>
+      </footer>
+    </section>
+  </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -102,8 +181,12 @@
         const status = await api("/api/status");
         byId("connectionDot").classList.add("online");
         byId("connectionText").textContent = "Panel API online";
-        byId("runtimeState").textContent = status.runtime;
-        byId("runtimeState").className = status.connected ? "good" : "wait";
+        byId("loginState").textContent = status.loggedIn ? "Accepted" : "Waiting";
+        byId("loginState").className = status.loggedIn ? "good" : "wait";
+        byId("worldState").textContent = status.worldState || (status.worldLoaded ? "Loaded" : "Waiting");
+        byId("worldState").className = status.worldLoaded ? "good" : "wait";
+        byId("characterState").textContent = status.alive ? "Alive" : status.worldLoaded ? "Not alive" : "Pending";
+        byId("characterState").className = status.alive ? "good" : "wait";
         byId("serverName").textContent = status.server || "—";
         byId("scriptState").textContent = status.scriptRunning ? "Running" : "Idle";
         byId("scriptState").className = status.scriptRunning ? "good" : "";
@@ -125,8 +208,12 @@
       } catch (error) {
         byId("connectionDot").classList.remove("online");
         byId("connectionText").textContent = "Host unavailable";
-        byId("runtimeState").textContent = "Offline";
-        byId("runtimeState").className = "wait";
+        byId("loginState").textContent = "Unknown";
+        byId("loginState").className = "wait";
+        byId("worldState").textContent = "Unknown";
+        byId("worldState").className = "wait";
+        byId("characterState").textContent = "Unknown";
+        byId("characterState").className = "wait";
         byId("connectionHint").textContent = "The panel cannot reach the Headless Skua control API.";
         byId("startScript").disabled = true;
         byId("stopScript").disabled = true;
@@ -135,28 +222,147 @@
       }
     }
 
-    async function refreshScripts() {
-      const picker = byId("scriptPicker");
-      try {
-        const result = await api("/api/scripts");
-        picker.replaceChildren(new Option("Choose an installed script…", ""));
-        for (const script of result.scripts || []) {
-          picker.add(new Option(script.name, script.path));
-        }
-        byId("scriptsHint").textContent = result.scripts?.length
-          ? `${result.scripts.length} script(s) found in ${result.directory}`
-          : `No .cs scripts found in ${result.directory || "the VibeSkua Scripts folder"}.`;
-      } catch (error) {
-        picker.replaceChildren(new Option("Could not load scripts", ""));
-        byId("scriptsHint").textContent = error.message;
+    let explorerPath = "";
+    let explorerParentPath = null;
+    let explorerSelection = null;
+
+    function closeExplorer() {
+      byId("explorerBackdrop").hidden = true;
+    }
+
+    function setExplorerSelection(file) {
+      explorerSelection = file;
+      document.querySelectorAll(".explorer-entry.selected").forEach(entry => entry.classList.remove("selected"));
+      if (file) {
+        byId("explorerSelected").textContent = file.name;
+        byId("useExplorerSelection").disabled = false;
+      } else {
+        byId("explorerSelected").textContent = "Nothing selected";
+        byId("useExplorerSelection").disabled = true;
       }
     }
 
-    byId("scriptPicker").addEventListener("change", () => {
-      const selectedPath = byId("scriptPicker").value;
-      if (selectedPath) byId("scriptPath").value = selectedPath;
+    function renderExplorerBreadcrumb() {
+      const breadcrumb = byId("explorerBreadcrumb");
+      breadcrumb.replaceChildren();
+
+      const rootButton = document.createElement("button");
+      rootButton.type = "button";
+      rootButton.className = "breadcrumb-item";
+      rootButton.textContent = "Scripts";
+      rootButton.addEventListener("click", () => loadExplorerDirectory(""));
+      breadcrumb.appendChild(rootButton);
+
+      if (!explorerPath) return;
+      const parts = explorerPath.split("/");
+      let accumulated = "";
+      for (const part of parts) {
+        accumulated = accumulated ? `${accumulated}/${part}` : part;
+        const current = accumulated;
+        const separator = document.createElement("span");
+        separator.textContent = "›";
+        separator.className = "breadcrumb-separator";
+        breadcrumb.appendChild(separator);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "breadcrumb-item";
+        button.textContent = part;
+        button.addEventListener("click", () => loadExplorerDirectory(current));
+        breadcrumb.appendChild(button);
+      }
+    }
+
+    function addExplorerEntry(container, entry, isFolder) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "explorer-entry";
+      button.innerHTML = `<span class="explorer-entry-icon">${isFolder ? "📁" : "📄"}</span><span class="explorer-entry-name"></span><span class="explorer-entry-type">${isFolder ? "Folder" : "C# script"}</span>`;
+      button.querySelector(".explorer-entry-name").textContent = entry.name;
+
+      if (isFolder) {
+        button.addEventListener("click", () => loadExplorerDirectory(entry.path));
+      } else {
+        button.addEventListener("click", () => {
+          container.querySelectorAll(".explorer-entry.selected").forEach(item => item.classList.remove("selected"));
+          button.classList.add("selected");
+          setExplorerSelection(entry);
+        });
+        button.addEventListener("dblclick", () => {
+          setExplorerSelection(entry);
+          useExplorerSelection();
+        });
+      }
+
+      container.appendChild(button);
+    }
+
+    async function loadExplorerDirectory(path = "") {
+      const list = byId("explorerList");
+      list.replaceChildren();
+      list.innerHTML = '<div class="explorer-empty">Loading folder…</div>';
+      setExplorerSelection(null);
+
+      try {
+        const result = await api(`/api/scripts?path=${encodeURIComponent(path)}`);
+        explorerPath = result.directory || "";
+        explorerParentPath = result.parentPath;
+        byId("explorerUp").disabled = explorerParentPath === null;
+        renderExplorerBreadcrumb();
+
+        list.replaceChildren();
+        for (const folder of result.folders || []) addExplorerEntry(list, folder, true);
+        for (const file of result.files || []) addExplorerEntry(list, file, false);
+
+        if (list.childElementCount === 0) {
+          list.innerHTML = '<div class="explorer-empty">This folder is empty. Add .cs scripts to this folder or choose another folder.</div>';
+        }
+
+        byId("scriptsHint").textContent = `Browsing VibeSkua Scripts/${explorerPath}`;
+      } catch (error) {
+        explorerPath = path;
+        explorerParentPath = null;
+        renderExplorerBreadcrumb();
+        list.innerHTML = "";
+        const message = document.createElement("div");
+        message.className = "explorer-empty";
+        message.textContent = error.message;
+        list.appendChild(message);
+      }
+    }
+
+    function useExplorerSelection() {
+      if (!explorerSelection) return;
+      byId("scriptPath").value = explorerSelection.path;
+      byId("scriptSelectionName").textContent = explorerSelection.name;
+      byId("scriptSelectionPath").textContent = `Scripts/${explorerSelection.path}`;
+      closeExplorer();
+    }
+
+    byId("browseScripts").addEventListener("click", async () => {
+      byId("explorerBackdrop").hidden = false;
+      await loadExplorerDirectory("");
     });
-    byId("refreshScripts").addEventListener("click", refreshScripts);
+    byId("closeExplorer").addEventListener("click", closeExplorer);
+    byId("cancelExplorer").addEventListener("click", closeExplorer);
+    byId("explorerBackdrop").addEventListener("click", event => {
+      if (event.target === byId("explorerBackdrop")) closeExplorer();
+    });
+    byId("explorerRoot").addEventListener("click", () => loadExplorerDirectory(""));
+    byId("explorerUp").addEventListener("click", () => {
+      if (explorerParentPath !== null) loadExplorerDirectory(explorerParentPath);
+    });
+    byId("explorerRefresh").addEventListener("click", () => loadExplorerDirectory(explorerPath));
+    byId("useExplorerSelection").addEventListener("click", useExplorerSelection);
+    byId("clearScript").addEventListener("click", () => {
+      byId("scriptPath").value = "";
+      byId("scriptSelectionName").textContent = "No script selected";
+      byId("scriptSelectionPath").textContent = "Browse the VibeSkua Scripts folder to choose a .cs file.";
+      byId("scriptsHint").textContent = "The explorer shows folders and C# scripts installed on the Headless Skua computer.";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !byId("explorerBackdrop").hidden) closeExplorer();
+    });
 
     async function refreshLogs() {
       try {
@@ -177,10 +383,15 @@
 
     byId("scriptForm").addEventListener("submit", async event => {
       event.preventDefault();
+      const selectedPath = byId("scriptPath").value.trim();
+      if (!selectedPath) {
+        notify("Browse the Scripts folder and choose a C# script first.", true);
+        return;
+      }
       try {
         const result = await api("/api/script/start", {
           method: "POST",
-          body: JSON.stringify({ path: byId("scriptPath").value.trim() })
+          body: JSON.stringify({ path: selectedPath })
         });
         notify(result.message || "Script started.");
         await refreshStatus();
@@ -227,7 +438,6 @@
     byId("refreshLogs").addEventListener("click", refreshLogs);
 
     refreshStatus();
-    refreshScripts();
     refreshLogs();
     window.setInterval(refreshStatus, 2500);
     window.setInterval(refreshLogs, 2500);
