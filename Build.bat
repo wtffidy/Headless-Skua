@@ -89,8 +89,14 @@ echo.
 echo Run an existing Skua script:
 echo   Build.bat run --script "C:\path\to\YourScript.cs"
 echo.
+echo Start ButlerV5 following a player:
+echo   Build.bat -butler PlayerName
+echo   Build.bat -butler PlayerName 30m
+echo   Build.bat -butler stop
+echo.
 
 if /I "%~1"=="run" goto :launch
+if /I "%~1"=="-butler" goto :butler
 
 exit /b 0
 
@@ -98,6 +104,19 @@ exit /b 0
 shift
 echo Starting Headless Skua...
 dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- run %*
+exit /b %errorlevel%
+
+:butler
+echo Starting headless ButlerV5...
+dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- %*
+exit /b %errorlevel%
+
+:stop_butler
+if not exist "src\HeadlessSkua.Host\bin\Release\net10.0\HeadlessSkua.dll" (
+    echo [ERROR] Headless Skua has not been built yet.
+    exit /b 1
+)
+dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- -butler stop
 exit /b %errorlevel%
 
 :failed
