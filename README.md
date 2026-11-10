@@ -123,3 +123,7 @@ ButlerV5 is bundled in the published `Build\plugins` folder.
 The published executable is self-contained and does not require a separately installed .NET runtime. Build.bat still requires the .NET 10 SDK to compile and publish.
 
 For manual development builds, initialize the submodule with `git submodule update --init --recursive`, then run `dotnet build HeadlessSkua.sln --configuration Release`.
+
+### Visual Studio
+
+Run `Build.bat` once before launching from Visual Studio. It installs the Playwright Chromium browser, downloads the Ruffle web runtime, and copies those runtime assets into `src\HeadlessSkua.Host\bin\Release\net10.0`. Subsequent Visual Studio builds copy the installed Ruffle files into the output automatically. Select `HeadlessSkua.Host` as the startup project and press F5.
