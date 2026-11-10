@@ -231,32 +231,63 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// </summary>
     private async Task RefreshStatusLoopAsync(CancellationToken cancellationToken)
     {
+        HashSet<string> warnedStatusFields = new(StringComparer.Ordinal);
+
         while (!cancellationToken.IsCancellationRequested)
         {
-            try
+            (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
+            bool loggedIn = loginAccepted || TryReadStatusValue("player login", () => _bot.Player.LoggedIn, false, warnedStatusFields);
+            string? server = TryReadStatusValue<string?>("server", () => _bot.Servers.LastName, null, warnedStatusFields);
+            bool worldLoaded = loggedIn && TryReadStatusValue("game world", () => _bot.Flash.IsWorldLoaded, false, warnedStatusFields);
+            bool avatarLoaded = worldLoaded && TryReadStatusValue("character avatar", () => !_bot.Flash.IsNull("world.myAvatar"), false, warnedStatusFields);
+            string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
+                ? acceptedAccount
+                : worldLoaded ? TryReadStatusValue<string?>("account", () => _bot.Player.Username, null, warnedStatusFields) : null;
+
+            // Publish the authoritative login/world/avatar milestones before querying
+            // inventory, assets, health, or map details. Those deeper reads can lag behind
+            // avatar creation and must not leave the panel stuck on "Character: Pending".
+            GameStatusSnapshot baseSnapshot = new(
+                loggedIn,
+                worldLoaded,
+                avatarLoaded,
+                false,
+                false,
+                account,
+                server,
+                null,
+                false,
+                false,
+                null,
+                null);
+
+            lock (_statusSync)
+                _statusSnapshot = baseSnapshot;
+
+            if (avatarLoaded)
             {
-                (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
-                bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
-                string? server = _bot.Servers.LastName;
-                bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
-                bool avatarLoaded = worldLoaded && !_bot.Flash.IsNull("world.myAvatar");
-                bool playerLoaded = avatarLoaded && _bot.Player.Loaded;
-                bool alive = avatarLoaded && _bot.Player.Alive;
-                string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
-                    ? acceptedAccount
-                    : worldLoaded ? _bot.Player.Username : null;
-                string? map = avatarLoaded ? _bot.Map.Name : null;
-                bool mapLoading = avatarLoaded && _bot.Map.Loading;
-                bool mapLoaded = avatarLoaded && _bot.Map.Loaded;
-                int? level = avatarLoaded ? _bot.Player.Level : null;
-                int? gold = avatarLoaded ? _bot.Player.Gold : null;
+                bool playerLoaded = TryReadStatusValue("player readiness", () => _bot.Player.Loaded, false, warnedStatusFields);
+                bool alive = TryReadStatusValue("player alive state", () => _bot.Player.Alive, false, warnedStatusFields);
+                string? map = TryReadStatusValue<string?>("map name", () => _bot.Map.Name, null, warnedStatusFields);
+                bool mapLoading = TryReadStatusValue("map loading state", () => _bot.Map.Loading, false, warnedStatusFields);
+                bool mapLoaded = TryReadStatusValue("map loaded state", () => _bot.Map.Loaded, false, warnedStatusFields);
+                int? level = TryReadStatusValue<int?>("player level", () => _bot.Player.Level, null, warnedStatusFields);
+                int? gold = TryReadStatusValue<int?>("player gold", () => _bot.Player.Gold, null, warnedStatusFields);
 
                 lock (_statusSync)
-                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, avatarLoaded, playerLoaded, alive, account, server, map, mapLoaded, mapLoading, level, gold);
-            }
-            catch (Exception exception)
-            {
-                HeadlessConsole.Debug($"Could not refresh the cached panel game state: {exception.GetType().Name}: {exception.Message}");
+                    _statusSnapshot = new GameStatusSnapshot(
+                        loggedIn,
+                        worldLoaded,
+                        avatarLoaded,
+                        playerLoaded,
+                        alive,
+                        account,
+                        server,
+                        map,
+                        mapLoaded,
+                        mapLoading,
+                        level,
+                        gold);
             }
 
             try
@@ -267,6 +298,31 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             {
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Reads one panel status value without allowing an unavailable AQW property to block
+    /// publication of the other independently sampled readiness milestones.
+    /// </summary>
+    /// <typeparam name="T">The expected status value type.</typeparam>
+    /// <param name="field">A short diagnostic field name.</param>
+    /// <param name="read">The AQW/VibeSkua property accessor.</param>
+    /// <param name="fallback">The safe value to publish when the accessor fails.</param>
+    /// <param name="warnedFields">Fields that have already produced a diagnostic.</param>
+    /// <returns>The sampled value or its fallback.</returns>
+    private static T TryReadStatusValue<T>(string field, Func<T> read, T fallback, HashSet<string> warnedFields)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception exception)
+        {
+            if (warnedFields.Add(field))
+                HeadlessConsole.Debug($"Could not sample panel {field}: {exception.GetType().Name}: {exception.Message}");
+
+            return fallback;
         }
     }
 
