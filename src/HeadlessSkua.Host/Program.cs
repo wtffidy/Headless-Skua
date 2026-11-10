@@ -50,18 +50,17 @@ internal static class Program
             if (string.Equals(args[1], "stop", StringComparison.OrdinalIgnoreCase))
                 return await HeadlessButlerCommand.StopAsync();
 
-            if (args.Length > 3)
-            {
-                Console.Error.WriteLine("Usage: HeadlessSkua -butler <username> [duration]");
-                return 1;
-            }
-
             List<string> butlerArguments = new() { "run", "--butler", args[1] };
-            if (args.Length == 3)
+            int optionIndex = 2;
+            if (args.Length > 2 && !args[2].StartsWith("--", StringComparison.Ordinal))
             {
                 butlerArguments.Add("--duration");
                 butlerArguments.Add(args[2]);
+                optionIndex = 3;
             }
+
+            for (int index = optionIndex; index < args.Length; index++)
+                butlerArguments.Add(args[index]);
 
             return await RunAsync(butlerArguments.ToArray());
         }
@@ -238,6 +237,8 @@ internal static class Program
               --runtime-dir <path>
                                  Ruffle host directory (defaults to runtime/ruffle-host).
               --script <path>   Existing Skua C# script to execute after client initialization.
+              --theme <name>    Console theme: midnight, ember, or neon.
+              --no-color        Disable terminal colours.
 
             Options:
               -h, --help         Show this help.
