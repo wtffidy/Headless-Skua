@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
 using Skua.Core.Interfaces;
 
 namespace HeadlessSkua;
@@ -104,17 +105,35 @@ internal static class Program
                 Console.WriteLine($"Starting script: {fullScriptPath}");
                 scriptManager.SetLoadedScript(fullScriptPath);
 
-                using CancellationTokenRegistration registration = cancellationTokenSource.Token.Register(() => scriptManager.ScriptCts?.Cancel());
                 Exception? scriptException = await scriptManager.StartScript();
 
                 if (scriptException is not null)
                 {
-                    Console.Error.WriteLine($"Script failed: {scriptException}");
+                    Console.Error.WriteLine($"Script failed to start: {scriptException}");
                     return 3;
                 }
 
-                Console.WriteLine("Script completed.");
-                return 0;
+                Trace.Listeners.Add(new ConsoleTraceListener());
+                Trace.AutoFlush = true;
+
+                while (scriptManager.ScriptRunning)
+                {
+                    if (cancellationTokenSource.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            scriptManager.ScriptCts?.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                        }
+                    }
+
+                    await Task.Delay(250);
+                }
+
+                Console.WriteLine("Script execution stopped.");
+                return cancellationTokenSource.IsCancellationRequested ? 0 : 0;
             }
 
             Console.WriteLine("Headless game runtime ready. Press Ctrl+C to stop.");
