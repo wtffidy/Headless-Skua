@@ -343,6 +343,6 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
     }
 
-    private sealed record ScriptStartRequest(string Path);
-    private sealed record ButlerStartRequest(string Username, string? Duration);
+    private sealed record ScriptStartRequest(string? Path);
+    private sealed record ButlerStartRequest(string? Username, string? Duration);
 }
