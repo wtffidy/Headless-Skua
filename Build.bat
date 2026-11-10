@@ -80,7 +80,7 @@ if errorlevel 1 goto :failed
 echo.
 echo [6/7] Publishing standalone Windows build...
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
-dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true --no-restore -o "%OUTPUT_DIR%"
+dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true -o "%OUTPUT_DIR%"
 if errorlevel 1 goto :failed
 
 echo.
