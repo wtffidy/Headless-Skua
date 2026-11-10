@@ -102,7 +102,7 @@ if not exist "%PLAYWRIGHT_DRIVER_DIR%\package\cli.js" (
     echo [ERROR] Playwright CLI entry point was not found in the build output.
     goto :failed
 )
-xcopy "%PLAYWRIGHT_DRIVER_DIR%" "%OUTPUT_DIR%\.playwright\\" /E /I /Y >nul
+xcopy "%PLAYWRIGHT_DRIVER_DIR%" "%OUTPUT_DIR%\.playwright\" /E /I /Y >nul
 if errorlevel 1 goto :failed
 
 echo.
