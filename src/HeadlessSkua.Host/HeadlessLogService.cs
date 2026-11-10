@@ -52,6 +52,7 @@ internal sealed class HeadlessLogService : ILogService
         if (string.IsNullOrWhiteSpace(message))
             return;
 
+        message = HeadlessLogRedactor.Redact(message);
         LogLevel level = type switch
         {
             LogType.Debug => LogLevel.Debug,
