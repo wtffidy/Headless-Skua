@@ -253,7 +253,8 @@ internal static class Program
 
                 string? butlerTarget = GetOption(args, "--butler");
                 string? scriptPath = GetOption(args, "--script");
-                if (!string.IsNullOrWhiteSpace(butlerTarget) || !string.IsNullOrWhiteSpace(scriptPath))
+                if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
+                    && (!string.IsNullOrWhiteSpace(butlerTarget) || !string.IsNullOrWhiteSpace(scriptPath)))
                 {
                     if (!await HeadlessLoginFlow.WaitForAutomationReadyAsync(
                         scriptInterface,
