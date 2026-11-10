@@ -97,6 +97,34 @@
       hostCallHandler = typeof handler === "function" ? handler : null;
     },
 
+    dispatchActionScript(name, args = []) {
+      if (!player) {
+        throw new Error("The Ruffle player has not been created.");
+      }
+
+      if (typeof name !== "string" || name.length === 0) {
+        throw new TypeError("An ActionScript callback name is required.");
+      }
+
+      if (!Array.isArray(args)) {
+        throw new TypeError("ActionScript callback arguments must be an array.");
+      }
+
+      // Run after the current page evaluation and exposed-binding callback have
+      // returned. This avoids re-entering Chromium while it is servicing a host call.
+      window.setTimeout(() => {
+        try {
+          Promise.resolve(player.ruffle().callExternalInterface(name, ...args)).catch(error => {
+            console.error("[HeadlessSkua] ActionScript dispatch failed:", name, error);
+          });
+        } catch (error) {
+          console.error("[HeadlessSkua] ActionScript dispatch failed:", name, error);
+        }
+      }, 0);
+
+      return true;
+    },
+
     callActionScript(name, args = []) {
       if (!player) {
         throw new Error("The Ruffle player has not been created.");
