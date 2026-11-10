@@ -45,12 +45,33 @@ jobs:
       - name: Check host diagnostics
         run: dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- doctor
 
-      - name: Smoke test headless Skua startup
+      - name: Publish standalone Windows host
         shell: pwsh
         run: |
+          $publishDir = Join-Path $env:RUNNER_TEMP "headless-skua-publish"
+          dotnet publish src/HeadlessSkua.Host/HeadlessSkua.Host.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=embedded -o $publishDir
+          if ($LASTEXITCODE -ne 0) { throw "Publishing the standalone host failed." }
+
+          $driverSource = "src/HeadlessSkua.Host/bin/Release/net10.0/.playwright"
+          if (-not (Test-Path (Join-Path $driverSource "node/win32_x64/node.exe"))) { throw "Playwright Node driver is missing from the build output." }
+          if (-not (Test-Path (Join-Path $driverSource "package/cli.js"))) { throw "Playwright CLI is missing from the build output." }
+          Copy-Item $driverSource (Join-Path $publishDir ".playwright") -Recurse -Force
+          Copy-Item "runtime/ruffle-host" (Join-Path $publishDir "runtime/ruffle-host") -Recurse -Force
+
+          if (-not (Test-Path (Join-Path $publishDir "panel/index.html"))) { throw "Remote panel assets were not published." }
+          if (-not (Test-Path (Join-Path $publishDir ".playwright/node/win32_x64/node.exe"))) { throw "Published Playwright Node driver is missing." }
+          & (Join-Path $publishDir "HeadlessSkua.exe") doctor
+          if ($LASTEXITCODE -ne 0) { throw "Published host diagnostics failed." }
+
+      - name: Smoke test published Headless Skua startup
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $env:RUNNER_TEMP "headless-skua-publish"
           $stdout = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.out.log"
           $stderr = Join-Path $env:RUNNER_TEMP "headless-skua-runtime.err.log"
-          $arguments = @("run", "--project", "src/HeadlessSkua.Host", "--configuration", "Release", "--no-build", "--", "run", "--script", "tests/Smoke/HeadlessSmoke.cs", "--skip-login")
+          $smokeScript = (Resolve-Path "tests/Smoke/HeadlessSmoke.cs").Path
+          $arguments = @("run", "--script", $smokeScript, "--skip-login", "--no-panel")
+          $process = Start-Process -FilePath (Join-Path $publishDir "HeadlessSkua.exe") -ArgumentList $arguments -WorkingDirectory $publishDir -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           try {
