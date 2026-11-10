@@ -21,6 +21,8 @@ Build\
 ├── HeadlessSkua.exe
 ├── plugins\
 │   └── ButlerV5.dll
+├── panel\
+│   └── index.html
 └── runtime\
     └── ruffle-host\
         ├── index.html
