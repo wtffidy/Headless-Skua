@@ -101,48 +101,50 @@ internal static class HeadlessLoginFlow
             HeadlessConsole.Warn($"Could not prepare the server connection policy: {exception.Message}");
         }
 
-        // Use Skua's normal server-list click path first. It selects the actual row in
-        // mcLogin and lets the game client perform its own connection handshake.
-        HeadlessConsole.Debug($"Selecting {selectedServer.Name} through the AQW server list...");
+        // Use Skua's direct ActionScript bridge first. The server-list MouseEvent path
+        // can remain inside Ruffle while the game starts its socket handshake, preventing
+        // the synchronous ExternalInterface call from returning to the host.
+        string serverData = JsonSerializer.Serialize(new
+        {
+            sName = selectedServer.Name,
+            sIP = selectedServer.IP,
+            iChat = selectedServer.ChatLevel,
+            iPort = serverPort,
+            bOnline = selectedServer.Online,
+            sLang = selectedServer.Lang,
+            iCount = selectedServer.PlayerCount,
+            bUpg = selectedServer.Upgrade,
+            iMax = selectedServer.MaxPlayers,
+            iLevel = selectedServer.Level
+        });
+
+        HeadlessConsole.Debug($"Requesting {selectedServer.Name} through Skua's direct server bridge...");
         bool selectedInClient = false;
         try
         {
-            selectedInClient = bot.Flash.Call<bool>("clickServer", selectedServer.Name);
+            selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
         }
         catch (Exception exception)
         {
-            HeadlessConsole.Debug($"Server-list click was unavailable: {exception.Message}");
+            HeadlessConsole.Debug($"Direct server bridge was unavailable: {exception.Message}");
         }
 
-        HeadlessConsole.Debug($"AQW server-list selection returned: {selectedInClient}.");
+        HeadlessConsole.Debug($"AQW direct server bridge returned: {selectedInClient}.");
         if (selectedInClient)
-            HeadlessConsole.Info($"Selected {selectedServer.Name} through the AQW server list.");
+            HeadlessConsole.Info($"Server connection request queued for {selectedServer.Name}.");
         else
         {
-            HeadlessConsole.Warn("The AQW server-list entry could not be clicked. Trying Skua's direct server bridge...");
-
-            string serverData = JsonSerializer.Serialize(new
-            {
-                sName = selectedServer.Name,
-                sIP = selectedServer.IP,
-                iChat = selectedServer.ChatLevel,
-                iPort = serverPort,
-                bOnline = selectedServer.Online,
-                sLang = selectedServer.Lang,
-                iCount = selectedServer.PlayerCount,
-                bUpg = selectedServer.Upgrade,
-                iMax = selectedServer.MaxPlayers,
-                iLevel = selectedServer.Level
-            });
-
+            HeadlessConsole.Warn("Skua's direct server bridge was unavailable. Trying the AQW server-list click...");
             try
             {
-                selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
+                selectedInClient = bot.Flash.Call<bool>("clickServer", selectedServer.Name);
             }
             catch (Exception exception)
             {
-                HeadlessConsole.Debug($"Direct server bridge was unavailable: {exception.Message}");
+                HeadlessConsole.Debug($"Server-list click was unavailable: {exception.Message}");
             }
+
+            HeadlessConsole.Debug($"AQW server-list selection returned: {selectedInClient}.");
         }
 
         if (!selectedInClient)
