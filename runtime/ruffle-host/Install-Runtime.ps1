@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Version = "0.7.1",
-    [string]$SwfPath = (Join-Path $PSScriptRoot "..\..\vendor\VibeSkua\Skua.AS3\skua\bin\skua.swf")
+    [string]$SwfPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +13,10 @@ $archiveName = "ruffle-$Version-web-selfhosted.zip"
 $downloadUrl = "https://github.com/ruffle-rs/ruffle/releases/download/v$Version/$archiveName"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("headless-skua-ruffle-" + [guid]::NewGuid().ToString("N"))
 $archivePath = Join-Path $tempRoot $archiveName
+
+if ([string]::IsNullOrWhiteSpace($SwfPath)) {
+    $SwfPath = Join-Path $PSScriptRoot "..\..\vendor\VibeSkua\Skua.AS3\skua\bin\skua.swf"
+}
 
 try {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
