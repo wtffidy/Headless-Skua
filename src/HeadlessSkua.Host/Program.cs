@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using CommunityToolkit.Mvvm.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Skua.Core.Interfaces;
 
 namespace HeadlessSkua;
@@ -76,8 +78,46 @@ internal static class Program
             await runtime.StartAsync(swfPath, cancellationTokenSource.Token);
             Console.WriteLine("Waiting for the Skua ActionScript client to initialize...");
             await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
-            Console.WriteLine("Skua ActionScript client initialized. Press Ctrl+C to stop.");
+            Console.WriteLine("Skua ActionScript client initialized.");
 
+            ServiceCollection services = new();
+            services.AddHeadlessSkua(flash);
+
+            await using ServiceProvider serviceProvider = services.BuildServiceProvider();
+            Ioc.Default.ConfigureServices(serviceProvider);
+
+            ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
+            settings.SetApplicationVersion();
+
+            // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
+            // rather than halfway through an unattended script.
+            serviceProvider.GetRequiredService<IScriptInterface>();
+            IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+
+            string? scriptPath = GetOption(args, "--script");
+            if (!string.IsNullOrWhiteSpace(scriptPath))
+            {
+                string fullScriptPath = Path.GetFullPath(scriptPath);
+                if (!File.Exists(fullScriptPath))
+                    throw new FileNotFoundException("The requested Skua script was not found.", fullScriptPath);
+
+                Console.WriteLine($"Starting script: {fullScriptPath}");
+                scriptManager.SetLoadedScript(fullScriptPath);
+
+                using CancellationTokenRegistration registration = cancellationTokenSource.Token.Register(() => scriptManager.ScriptCts?.Cancel());
+                Exception? scriptException = await scriptManager.StartScript();
+
+                if (scriptException is not null)
+                {
+                    Console.Error.WriteLine($"Script failed: {scriptException}");
+                    return 3;
+                }
+
+                Console.WriteLine("Script completed.");
+                return 0;
+            }
+
+            Console.WriteLine("Headless game runtime ready. Press Ctrl+C to stop.");
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
             return 0;
         }
@@ -131,6 +171,7 @@ internal static class Program
               --swf <path>       Path to the Skua SWF (defaults to runtime game/skua.swf).
               --runtime-dir <path>
                                  Ruffle host directory (defaults to runtime/ruffle-host).
+              --script <path>   Existing Skua C# script to execute after client initialization.
 
             Options:
               -h, --help         Show this help.
