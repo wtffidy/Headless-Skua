@@ -78,6 +78,30 @@
         throw new Error("A valid player container is required.");
       }
 
+      // Ruffle's WebAssembly build cannot open raw TCP sockets in Chromium.
+      // Load the live AQW host/port mapping and route those sockets through the
+      // host's loopback WebSocket-to-TCP bridge before creating the player.
+      const proxyResponse = await fetch("/socket-proxy-config", { cache: "no-store" });
+      if (!proxyResponse.ok) {
+        throw new Error(`AQW socket proxy configuration failed: HTTP ${proxyResponse.status}`);
+      }
+
+      const socketProxy = await proxyResponse.json();
+      if (!Array.isArray(socketProxy) || socketProxy.length === 0) {
+        throw new Error("No AQW WebSocket proxy endpoints were configured.");
+      }
+
+      const ruffleConfig = {
+        ...(window.RufflePlayer.config || {}),
+        socketProxy
+      };
+
+      if (new URLSearchParams(window.location.search).has("quiet")) {
+        ruffleConfig.logLevel = "error";
+      }
+
+      window.RufflePlayer.config = ruffleConfig;
+
       const ruffle = window.RufflePlayer.newest();
       player = ruffle.createPlayer();
       player.id = "headless-skua-player";
