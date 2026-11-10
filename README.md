@@ -11,7 +11,7 @@ Headless Skua is a separate .NET 10 host for Skua. It is intended to run without
 - Run the AQW game client in a genuinely headless runtime.
 - Preserve the existing Skua scripting API and CoreBots compatibility.
 - Replace the Windows-only ActiveX/COM Flash host with a runtime-neutral implementation.
-- Keep the host independent of Avalonia and desktop UI assemblies.
+- Keep desktop UI out of the runtime while allowing plugins to provide headless-compatible behaviour.
 - Start with one reliable account session, then add isolated multi-account sessions.
 - Provide a CLI, structured logs, graceful shutdown, and automation-friendly control.
 
@@ -63,6 +63,21 @@ To build, prepare the runtime, and execute an existing Skua C# script:
 ```bat
 Build.bat run --script "C:\\path\\to\\YourScript.cs"
 ```
+
+### Plugins and ButlerV5
+
+Headless Skua initializes Skua's plugin manager and discovers plugin assemblies from the normal VibeSkua plugin directory (%APPDATA%\VibeSkua\plugins) as well as the host's local plugins folder. Plugins that rely on interactive desktop windows cannot show those windows in headless mode; their non-UI functionality can still run when their dependencies support the headless host.
+
+ButlerV5 is bundled as a plugin and can be controlled from the command line:
+
+\`\`\`bat
+Build.bat -butler PlayerName
+Build.bat -butler PlayerName 30m
+Build.bat -butler PlayerName 02:00:00
+Build.bat -butler stop
+\`\`\`
+
+An omitted duration means the follow runs indefinitely. Durations accept s, m, h, d, or HH:MM:SS. The stop command sends a local named-pipe request to the active Butler session. ButlerV5 continues to use its existing shared sync files, so other ButlerV5-enabled clients can see and summon this account as usual.
 
 Requirements: Git and the .NET 10 SDK. The script uses PowerShell (or PowerShell 7 if installed) for runtime setup. Run `Build.bat` again after pulling updates to rebuild and refresh the runtime.
 
