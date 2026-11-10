@@ -78,6 +78,12 @@ internal static class HeadlessLoginFlow
         if (selectedServer is null)
             return false;
 
+        // Publish the chosen target before invoking ActionScript. The server-list click can
+        // begin a long asynchronous game handshake, but the panel should still show the target.
+        bot.Servers.LastIP = selectedServer.IP;
+        bot.Servers.LastName = selectedServer.Name;
+        HeadlessConsole.Info($"Selected server target: {selectedServer.Name} ({selectedServer.IP}).");
+
         int serverPort = selectedServer.Port > 0 ? selectedServer.Port : 5588;
         HeadlessConsole.Info($"Preparing the {selectedServer.Name} connection ({selectedServer.IP}:{serverPort})...");
 
@@ -200,14 +206,20 @@ internal static class HeadlessLoginFlow
         DateTime deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
-            if (bot.Player.Playing && bot.Flash.IsWorldLoaded)
+            // Player.Playing reads world.myAvatar state. Do not query it until the
+            // world and avatar clips exist, otherwise early login can hit Error #1009.
+            if (bot.Flash.IsWorldLoaded
+                && !bot.Flash.IsNull("world.myAvatar")
+                && bot.Player.Playing)
                 return true;
 
             await Task.Delay(250, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return bot.Player.Playing && bot.Flash.IsWorldLoaded;
+        return bot.Flash.IsWorldLoaded
+            && !bot.Flash.IsNull("world.myAvatar")
+            && bot.Player.Playing;
     }
 
     /// <summary>
