@@ -26,9 +26,13 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private readonly int _port;
     private readonly string _panelDirectory;
     private readonly object _butlerSync = new();
+    private readonly object _statusSync = new();
     private WebApplication? _application;
     private CancellationTokenSource? _butlerCancellation;
     private Task? _butlerTask;
+    private CancellationTokenSource? _statusMonitorCancellation;
+    private Task? _statusMonitorTask;
+    private GameStatusSnapshot _statusSnapshot = new(false, false, false, null, null);
 
     /// <summary>
     /// Creates the dashboard host. It binds to loopback unless remote access is explicitly enabled.
@@ -111,6 +115,9 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         MapApi(_application);
         await _application.StartAsync(cancellationToken);
 
+        _statusMonitorCancellation = new CancellationTokenSource();
+        _statusMonitorTask = Task.Run(() => RefreshStatusLoopAsync(_statusMonitorCancellation.Token));
+
         HeadlessConsole.Success($"Remote panel listening on port {_port}.");
         HeadlessConsole.Panel("Remote Panel",
             ("Local URL", $"http://127.0.0.1:{_port}"),
@@ -139,12 +146,12 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private IResult GetStatus()
     {
         (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
-        bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
-        bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
-        bool alive = worldLoaded && _bot.Player.Alive;
+        GameStatusSnapshot snapshot = GetStatusSnapshot();
+        bool loggedIn = loginAccepted || snapshot.LoggedIn;
+        bool worldLoaded = loggedIn && snapshot.WorldLoaded;
+        bool alive = worldLoaded && snapshot.Alive;
         bool connected = loggedIn && worldLoaded && alive;
-        string? playerAccount = loggedIn ? _bot.Player.Username : null;
-        string? account = string.IsNullOrWhiteSpace(playerAccount) ? acceptedAccount : playerAccount;
+        string? account = string.IsNullOrWhiteSpace(acceptedAccount) ? snapshot.Account : acceptedAccount;
         string runtime = !loggedIn
             ? "Not logged in"
             : !worldLoaded
@@ -153,7 +160,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                     ? "World loaded · character not alive"
                     : "Connected";
         string connectionMessage = !loggedIn
-            ? "AQW has not confirmed the login yet. The panel API is online, but the game session is not authenticated."
+            ? "The panel API is online. Waiting for AQW to confirm the game login."
             : !worldLoaded
                 ? $"AQW accepted the login{(string.IsNullOrWhiteSpace(account) ? string.Empty : $" for {account}")}. The game world is still loading; automation unlocks when the character is ready."
                 : !alive
@@ -174,12 +181,59 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             worldState = worldLoaded ? "Loaded" : loggedIn ? "Loading" : "Waiting",
             runtime,
             connectionMessage,
-            server = _bot.Servers.LastName,
+            server = snapshot.Server,
             scriptRunning = _scriptManager.ScriptRunning,
             butlerRunning = _butlerTask is { IsCompleted: false },
             butlerAvailable = butlerBlockReason is null,
             butlerBlockReason
         });
+    }
+
+    /// <summary>
+    /// Returns the latest sampled game state without invoking Ruffle from an HTTP request.
+    /// </summary>
+    private GameStatusSnapshot GetStatusSnapshot()
+    {
+        lock (_statusSync)
+            return _statusSnapshot;
+    }
+
+    /// <summary>
+    /// Samples the Ruffle-backed player state in the background so slow Flash calls never
+    /// prevent the panel's status endpoint from responding.
+    /// </summary>
+    private async Task RefreshStatusLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                (bool loginAccepted, string? acceptedAccount) = _sessionState.GetSnapshot();
+                bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
+                bool worldLoaded = loggedIn && _bot.Flash.IsWorldLoaded;
+                bool alive = worldLoaded && _bot.Player.Alive;
+                string? account = !string.IsNullOrWhiteSpace(acceptedAccount)
+                    ? acceptedAccount
+                    : worldLoaded ? _bot.Player.Username : null;
+                string? server = _bot.Servers.LastName;
+
+                lock (_statusSync)
+                    _statusSnapshot = new GameStatusSnapshot(loggedIn, worldLoaded, alive, account, server);
+            }
+            catch (Exception exception)
+            {
+                HeadlessConsole.Debug($"Could not refresh the cached panel game state: {exception.GetType().Name}: {exception.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+        }
     }
 
     private IResult GetScripts(string? relativeDirectory)
@@ -275,8 +329,8 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     private bool IsGameReady()
     {
         (bool loginAccepted, _) = _sessionState.GetSnapshot();
-        bool loggedIn = loginAccepted || _bot.Player.LoggedIn;
-        return loggedIn && _bot.Flash.IsWorldLoaded && _bot.Player.Alive;
+        GameStatusSnapshot snapshot = GetStatusSnapshot();
+        return (loginAccepted || snapshot.LoggedIn) && snapshot.WorldLoaded && snapshot.Alive;
     }
 
     private async Task<IResult> StartScriptAsync(ScriptStartRequest request)
@@ -444,6 +498,24 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        _statusMonitorCancellation?.Cancel();
+        if (_statusMonitorTask is not null)
+        {
+            try
+            {
+                await _statusMonitorTask.WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (TimeoutException)
+            {
+                HeadlessConsole.Debug("The panel status monitor did not stop before shutdown.");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _statusMonitorCancellation?.Dispose();
+
         lock (_butlerSync)
             _butlerCancellation?.Cancel();
 
@@ -471,6 +543,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
         }
     }
 
+    private sealed record GameStatusSnapshot(bool LoggedIn, bool WorldLoaded, bool Alive, string? Account, string? Server);
     private sealed record ScriptStartRequest(string? Path);
     private sealed record ButlerStartRequest(string? Username, string? Duration);
 }
