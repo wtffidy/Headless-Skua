@@ -515,13 +515,22 @@ internal sealed class RuffleRuntime : IAsyncDisposable
 
         _page.Console += (_, message) =>
         {
+            bool actionableInfo = message.Text.Contains("[Game] ERR", StringComparison.OrdinalIgnoreCase)
+                || message.Text.Contains("Error #", StringComparison.OrdinalIgnoreCase)
+                || message.Text.Contains("BitmapData.draw", StringComparison.OrdinalIgnoreCase)
+                || message.Text.Contains("panic", StringComparison.OrdinalIgnoreCase)
+                || message.Text.Contains("exception", StringComparison.OrdinalIgnoreCase);
+
             if (HeadlessConsole.Quiet
-                || message.Type is "log" or "info" or "debug"
+                || message.Type is "log" or "debug"
+                || (message.Type == "info" && !actionableInfo)
                 || message.Text.Contains("GPU stall due to ReadPixels", StringComparison.OrdinalIgnoreCase)
                 || message.Text.Contains("Failed to load resource: the server responded with a status of 404", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            TerminalLogLevel level = message.Type == "error" ? TerminalLogLevel.Error : TerminalLogLevel.Warn;
+            TerminalLogLevel level = message.Type == "error" || actionableInfo
+                ? TerminalLogLevel.Error
+                : TerminalLogLevel.Warn;
             string cleanMessage = System.Text.RegularExpressions.Regex.Replace(message.Text, @"%c[^%]*%c", string.Empty);
             cleanMessage = System.Text.RegularExpressions.Regex.Replace(cleanMessage, @"\s*(color|background|font-style):\s*[^;]+;?", string.Empty);
             HeadlessConsole.Log(level, $"[Browser] {cleanMessage.Trim()}");
