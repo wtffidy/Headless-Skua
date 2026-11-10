@@ -23,6 +23,9 @@
     window.RufflePlayer = window.RufflePlayer || {};
     window.RufflePlayer.config = {
       autoplay: "on",
+      // AQW composites maps and character layers with BitmapData.draw.
+      // The basic WebGL backend does not implement that API; wgpu-webgl does.
+      preferredRenderer: "wgpu-webgl",
       logLevel: "info",
       networking: "all",
       showSwfDownload: false,
