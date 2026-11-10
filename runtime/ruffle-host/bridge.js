@@ -107,8 +107,11 @@
       player.id = "headless-skua-player";
       container.appendChild(player);
 
+      const playerApi = player.ruffle();
+      playerApi.config = ruffleConfig;
+
       window.__headlessSkua.setStatus("loading", source);
-      await player.ruffle().load({
+      await playerApi.load({
         url: source,
         allowScriptAccess: true
       });
