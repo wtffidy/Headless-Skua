@@ -130,6 +130,7 @@ internal static class Program
             using RuffleFlashUtil flash = new(runtime);
             HeadlessSessionState sessionState = new();
             TaskCompletionSource swfLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            HeadlessLogService? diagnosticLogs = null;
             int loginAcceptedLogged = 0;
 
             flash.FlashCall += (name, values) =>
@@ -145,11 +146,23 @@ internal static class Program
                         string? packetType = GetPacketType(packet);
                         if (!string.IsNullOrWhiteSpace(packetType)
                             && LoggedPacketTypes.TryAdd($"{direction}:{packetType}", 0))
-                            HeadlessConsole.Debug($"AQW {direction} packet type: {packetType} ({System.Text.Encoding.UTF8.GetByteCount(packet)} bytes).");
+                        {
+                            string packetMessage = $"AQW {direction} packet type: {packetType} ({System.Text.Encoding.UTF8.GetByteCount(packet)} bytes).";
+                            if (diagnosticLogs is not null)
+                                diagnosticLogs.DebugLog(packetMessage);
+                            else
+                                HeadlessConsole.Debug(packetMessage);
+                        }
 
                         if (direction == "client" && TryGetTransferMap(packet, out string? targetMap)
                             && LoggedPacketTypes.TryAdd($"client:transfer:{targetMap}", 0))
-                            HeadlessConsole.Info($"AQW map transfer requested: {targetMap}.");
+                        {
+                            string transferMessage = $"AQW map transfer packet emitted: {targetMap}.";
+                            if (diagnosticLogs is not null)
+                                diagnosticLogs.DebugLog(transferMessage);
+                            else
+                                HeadlessConsole.Info(transferMessage);
+                        }
                     }
                 }
                 if ((string.Equals(name, "packetFromServer", StringComparison.OrdinalIgnoreCase)
@@ -231,6 +244,7 @@ internal static class Program
                 HeadlessConsole.Success($"Skua game-state services initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
                 HeadlessLogService headlessLogs = serviceProvider.GetRequiredService<HeadlessLogService>();
+                diagnosticLogs = headlessLogs;
                 flash.DiagnosticLogged += headlessLogs.DebugLog;
 
                 IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
