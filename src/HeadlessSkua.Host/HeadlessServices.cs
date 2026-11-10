@@ -30,7 +30,8 @@ internal static class HeadlessServices
         services.AddSingleton<IFlashUtil>(flash);
         services.AddSingleton<ISettingsService, HeadlessSettingsService>();
         services.AddSingleton<IDialogService, HeadlessDialogService>();
-        services.AddSingleton<ILogService, HeadlessLogService>();
+        services.AddSingleton<HeadlessLogService>();
+        services.AddSingleton<ILogService>(provider => provider.GetRequiredService<HeadlessLogService>());
         services.AddSingleton<IDispatcherService, HeadlessDispatcherService>();
         services.AddSingleton<IPluginHelper, HeadlessPluginHelper>();
         services.AddSingleton<PluginManager>();
