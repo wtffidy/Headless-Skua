@@ -122,14 +122,24 @@ internal static class HeadlessLoginFlow
         bool selectedInClient = false;
         try
         {
-            selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
+            if (bot.Flash is RuffleFlashUtil flashUtil)
+            {
+                // Queue the ActionScript callback and return immediately. A synchronous
+                // ExternalInterface call can remain blocked while AQW starts its socket handshake.
+                flashUtil.DispatchActionScript("connectToServer", serverData);
+                selectedInClient = true;
+                HeadlessConsole.Debug("AQW direct server bridge request queued asynchronously.");
+            }
+            else
+            {
+                selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
+                HeadlessConsole.Debug($"AQW direct server bridge returned: {selectedInClient}.");
+            }
         }
         catch (Exception exception)
         {
             HeadlessConsole.Debug($"Direct server bridge was unavailable: {exception.Message}");
         }
-
-        HeadlessConsole.Debug($"AQW direct server bridge returned: {selectedInClient}.");
         if (selectedInClient)
             HeadlessConsole.Info($"Server connection request queued for {selectedServer.Name}.");
         else
