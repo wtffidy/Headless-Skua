@@ -179,7 +179,7 @@ internal static class Program
             // Resolve the real Skua script interface now so missing desktop dependencies fail at startup,
             // rather than halfway through an unattended script.
             IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
-            scriptInterface.Initialize();
+            serviceProvider.GetRequiredService<IScriptInterfaceManager>().Initialize();
             HeadlessConsole.Success("Skua game-state services initialized.");
 
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
