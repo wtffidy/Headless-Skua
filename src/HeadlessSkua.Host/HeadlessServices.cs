@@ -27,6 +27,9 @@ internal static class HeadlessServices
     {
         services.AddCommonServices();
 
+        // Desktop Skua registers this through Avalonia. Headless has no screen to capture.
+        services.AddSingleton<IScreenshotService, HeadlessScreenshotService>();
+
         services.AddSingleton<IFlashUtil>(flash);
         services.AddSingleton<ISettingsService, HeadlessSettingsService>();
         services.AddSingleton<IDialogService, HeadlessDialogService>();
@@ -95,5 +98,20 @@ internal static class HeadlessServices
         services.AddSingleton<BackgroundThemeService>();
 
         return services;
+    }
+}
+
+/// <summary>
+/// Provides the screenshot contract without depending on a desktop window or display server.
+/// </summary>
+internal sealed class HeadlessScreenshotService : IScreenshotService
+{
+    /// <summary>
+    /// Returns no image because the headless runtime has no desktop surface to capture.
+    /// </summary>
+    /// <returns>An empty byte array.</returns>
+    public System.Threading.Tasks.Task<byte[]> TakeScreenshotAsync()
+    {
+        return System.Threading.Tasks.Task.FromResult(System.Array.Empty<byte>());
     }
 }
