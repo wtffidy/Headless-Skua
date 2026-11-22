@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>HeadlessSkua</AssemblyName>
     <!-- Match the vendored VibeSkua core version so scripts see the correct client version. -->
-    <InformationalVersion>2.1.2</InformationalVersion>
+    <InformationalVersion>2.1.5</InformationalVersion>
     <ApplicationIcon>../../HeadLessSkua.ico</ApplicationIcon>
     <RootNamespace>HeadlessSkua</RootNamespace>
     <PublishSingleFile>true</PublishSingleFile>
@@ -17,10 +17,13 @@
     <Compile Include="../../HeadlessConsole.cs" Link="HeadlessConsole.cs" />
     <Content Include="../../panel/**/*" Link="panel/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.Playwright" Version="1.56.0" />
     <ProjectReference Include="../HeadlessSkua.Compatibility/HeadlessSkua.Compatibility.csproj" />
     <ProjectReference Include="../../vendor/VibeSkua/Skua.Core/Skua.Core.csproj" />
-    <ProjectReference Include="../../vendor/VibeSkua/Skua.Plugin.ButlerV5/Skua.Plugin.ButlerV5.csproj" />
+    <ProjectReference Include="../../vendor/VibeSkua/Skua.Plugin.ButlerV5/Skua.Plugin.ButlerV5.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>BundledPlugin</OutputItemType>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
   </ItemGroup>
 
   <Target Name="CopyPanelAssetsToBuildOutput" AfterTargets="Build">
@@ -41,19 +44,11 @@
 
   <Target Name="CopyBundledPlugins" AfterTargets="Build">
     <MakeDir Directories="$(TargetDir)plugins" />
-    <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(TargetDir)plugins" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\..\vendor\VibeSkua\Skua.Plugin.ButlerV5\bin\$(Configuration)\net10.0\ButlerV5.dll" DestinationFolder="$(TargetDir)plugins" SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\..\..\vendor\VibeSkua\Skua.Plugin.ButlerV5\bin\$(Configuration)\net10.0\ButlerV5.dll')" />
   </Target>
 
   <Target Name="CopyBundledPluginsToPublish" AfterTargets="Publish">
     <MakeDir Directories="$(PublishDir)plugins" />
-    <Copy SourceFiles="$(TargetDir)ButlerV5.dll" DestinationFolder="$(PublishDir)plugins" SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="CopyRuffleRuntimeToBuildOutput" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\runtime\ruffle-host\index.html')">
-    <ItemGroup>
-      <RuffleRuntimeFiles Include="$(MSBuildProjectDirectory)\..\..\runtime\ruffle-host\**\*" />
-    </ItemGroup>
-    <MakeDir Directories="@(RuffleRuntimeFiles->'$(TargetDir)runtime\ruffle-host\%(RecursiveDir)')" />
-    <Copy SourceFiles="@(RuffleRuntimeFiles)" DestinationFiles="@(RuffleRuntimeFiles->'$(TargetDir)runtime\ruffle-host\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\..\vendor\VibeSkua\Skua.Plugin.ButlerV5\bin\$(Configuration)\net10.0\ButlerV5.dll" DestinationFolder="$(PublishDir)plugins" SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\..\..\vendor\VibeSkua\Skua.Plugin.ButlerV5\bin\$(Configuration)\net10.0\ButlerV5.dll')" />
   </Target>
 </Project>

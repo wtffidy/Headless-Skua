@@ -149,7 +149,7 @@ internal sealed class HeadlessSessionState
     /// </summary>
     /// <param name="accepted">Whether AQW accepted the login.</param>
     /// <param name="account">The account name returned by AQW.</param>
-    private void SetLoginState(bool accepted, string? account)
+    public void SetLoginState(bool accepted, string? account)
     {
         lock (_sync)
         {

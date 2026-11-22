@@ -3,7 +3,9 @@ using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
+using HeadlessSkua.Protocol;
 using Skua.Core.Interfaces;
+using Skua.Core.Models;
 using Skua.Headless.UI;
 
 namespace HeadlessSkua;
@@ -105,32 +107,14 @@ internal static class Program
     }
 
     /// <summary>
-    /// Starts one headless Ruffle game session and keeps it alive until shutdown.
+    /// Starts one headless pure protocol game session and keeps it alive until shutdown.
     /// </summary>
-    /// <param name="args">Command-line arguments containing runtime and SWF paths.</param>
+    /// <param name="args">Command-line arguments.</param>
     /// <returns>A process exit code indicating whether the session started successfully.</returns>
     private static async Task<int> RunAsync(string[] args)
     {
         Stopwatch startupTimer = Stopwatch.StartNew();
-        string runtimeDirectory = GetOption(args, "--runtime-dir") ?? GetDefaultRuntimeDirectory();
-        string swfPath = GetOption(args, "--swf") ?? Path.Combine(runtimeDirectory, "game", "skua.swf");
-        string gameVersion = GetOption(args, "--game-version") ?? "r8";
-        if (!gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase)
-            && !gameVersion.Equals("r8", StringComparison.OrdinalIgnoreCase))
-        {
-            HeadlessConsole.Error("Invalid --game-version. Choose r4 or r8.");
-            return 1;
-        }
-
-        string gameClientFileName = $"Game4000{gameVersion.ToLowerInvariant()}.swf";
-        string gameClientPath = Path.Combine(runtimeDirectory, "game", gameClientFileName);
-        if (gameVersion.Equals("r4", StringComparison.OrdinalIgnoreCase) && !File.Exists(gameClientPath))
-        {
-            HeadlessConsole.Error($"The R4 game client was selected but was not found: {gameClientPath}");
-            return 1;
-        }
-
-        HeadlessConsole.Info($"Selected AQW game client: {gameClientFileName}.");
+        HeadlessConsole.Info("Using Pure Protocol Socket Client (no browser / no Ruffle).");
         using CancellationTokenSource cancellationTokenSource = new();
 
         ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
@@ -143,10 +127,9 @@ internal static class Program
 
         try
         {
-            await using RuffleRuntime runtime = new(runtimeDirectory);
-            using RuffleFlashUtil flash = new(runtime);
+            await using AqwProtocolSession session = new();
+            using VirtualFlashUtil flash = new(session);
             HeadlessSessionState sessionState = new();
-            TaskCompletionSource swfLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             HeadlessLogService? diagnosticLogs = null;
             int loginAcceptedLogged = 0;
 
@@ -182,10 +165,6 @@ internal static class Program
                         }
                     }
                 }
-                if ((string.Equals(name, "packetFromServer", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(name, "pext", StringComparison.OrdinalIgnoreCase))
-                    && values.OfType<string>().Any(value => value.Contains("loginResponse", StringComparison.OrdinalIgnoreCase)))
-                    HeadlessConsole.Debug($"AQW loginResponse packet received through {name}.");
 
                 (bool loginAccepted, string? acceptedAccount) = sessionState.GetSnapshot();
 
@@ -198,45 +177,8 @@ internal static class Program
                     && !name.Equals("packetFromServer", StringComparison.OrdinalIgnoreCase)
                     && !name.Equals("pext", StringComparison.OrdinalIgnoreCase)
                     && !name.Equals("debug", StringComparison.OrdinalIgnoreCase))
-                    HeadlessConsole.Debug($"[AS3 -> Host] {name}");
-
-                if (string.Equals(name, "loaded", StringComparison.OrdinalIgnoreCase))
-                {
-                    swfLoaded.TrySetResult();
-                    return;
-                }
-
-                // The SWF asks its host to begin loading AQW after Externalizer initializes.
-                // Invoke loadClient only after the browser callback has returned; calling back
-                // into the same Playwright page inline can deadlock the exposed binding.
-                if (string.Equals(name, "requestLoadGame", StringComparison.OrdinalIgnoreCase))
-                {
-                    _ = Task.Run(() =>
-                    {
-                        try
-                        {
-                            // The Skua bootstrap defaults to hideme.swf, which AQW no longer serves.
-                            // Set a valid built-in title background before loadClient copies sBG into game.params.
-                            flash.Call("setBackgroundValues", "Generic2.swf", string.Empty);
-                            HeadlessConsole.Info("Using Generic2.swf for the AQW title background.");
-
-                            HeadlessConsole.Debug("Queuing the SWF loadClient callback...");
-                            flash.Dispatch("loadClient");
-                            HeadlessConsole.Success("AQW game-load callback queued in Ruffle.");
-                        }
-                        catch (Exception exception)
-                        {
-                            HeadlessConsole.Error($"Unable to dispatch the AQW game-load request: {exception.Message}");
-                        }
-                    });
-                }
+                    HeadlessConsole.Debug($"[Protocol Event] {name}");
             };
-
-            await runtime.StartAsync(swfPath, gameClientFileName, cancellationTokenSource.Token);
-            HeadlessConsole.Info($"Ruffle browser started in {startupTimer.Elapsed.TotalSeconds:F1}s.");
-            HeadlessConsole.Info("Waiting for the Skua ActionScript client to initialize...");
-            await swfLoaded.Task.WaitAsync(TimeSpan.FromSeconds(90), cancellationTokenSource.Token);
-            HeadlessConsole.Success($"Skua ActionScript client initialized in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
             ServiceCollection services = new();
             services.AddHeadlessSkua(flash);
@@ -249,14 +191,9 @@ internal static class Program
                 Skua.Core.Models.ClientFileSources.EnsureInitialized();
 
                 IPluginManager pluginManager = serviceProvider.GetRequiredService<IPluginManager>();
-
                 ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
                 settings.SetApplicationVersion();
 
-                // Resolve services without starting their background polling or loading plugins.
-                // AQW creates world.myAvatar and its inventory asynchronously after loginResponse.
-                // Starting Skua's 20 ms ScriptTimer or plugins before that point causes null-object
-                // callbacks (inventoryBagUsedSlots, HidePlayers, and map response handlers).
                 IScriptInterface scriptInterface = serviceProvider.GetRequiredService<IScriptInterface>();
                 IScriptInterfaceManager scriptInterfaceManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
 
@@ -279,28 +216,20 @@ internal static class Program
 
                 if (remotePanel is not null)
                     await remotePanel.StartAsync(cancellationTokenSource.Token);
-                HeadlessConsole.Info($"Headless startup completed in {startupTimer.Elapsed.TotalSeconds:F1}s. Waiting for account login.");
+
+                HeadlessConsole.Info($"Pure protocol engine initialized in {startupTimer.Elapsed.TotalSeconds:F2}s. Waiting for account login.");
 
                 if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase)
-                    && !await HeadlessLoginFlow.LoginAsync(scriptInterface, sessionState, cancellationTokenSource.Token))
+                    && !await HeadlessLoginFlow.LoginProtocolAsync(scriptInterface, session, sessionState, args, cancellationTokenSource.Token))
                     return 4;
 
                 string? butlerTarget = GetOption(args, "--butler");
                 string? scriptPath = GetOption(args, "--script");
-                if (!args.Contains("--skip-login", StringComparer.OrdinalIgnoreCase))
-                {
-                    if (!await HeadlessLoginFlow.WaitForAutomationReadyAsync(
-                        scriptInterface,
-                        TimeSpan.FromSeconds(180),
-                        cancellationTokenSource.Token))
-                        return 4;
-                }
 
-                // Only start Skua's recurring game-state work and load plugins after AQW has
-                // fully created the character, inventory, and player assets.
                 scriptInterfaceManager.Initialize();
+                EnsureBundledPluginsDeployed();
                 pluginManager.Initialize();
-                HeadlessConsole.Success($"Skua game-state services initialized after player readiness in {startupTimer.Elapsed.TotalSeconds:F1}s.");
+                HeadlessConsole.Success($"Skua game services active in {startupTimer.Elapsed.TotalSeconds:F1}s.");
 
                 if (!string.IsNullOrWhiteSpace(butlerTarget))
                     return await HeadlessButlerCommand.RunAsync(pluginManager, butlerTarget, GetOption(args, "--duration"), cancellationTokenSource.Token);
@@ -347,6 +276,12 @@ internal static class Program
                 }
 
                 HeadlessConsole.Success("Headless game runtime ready. Press Ctrl+C to stop.");
+                if (args.Contains("--exit-after-login", StringComparer.OrdinalIgnoreCase))
+                {
+                    HeadlessConsole.Info("Session verified (--exit-after-login). Exiting cleanly.");
+                    await Task.Delay(3000, cancellationTokenSource.Token);
+                    return 0;
+                }
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationTokenSource.Token);
                 return 0;
             }
@@ -445,8 +380,12 @@ internal static class Program
     /// <returns>The available runtime directory.</returns>
     private static string GetDefaultRuntimeDirectory()
     {
-        foreach (string startPath in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        string? processDir = Path.GetDirectoryName(Environment.ProcessPath);
+        foreach (string? startPath in new[] { processDir, AppContext.BaseDirectory, Environment.CurrentDirectory })
         {
+            if (string.IsNullOrWhiteSpace(startPath))
+                continue;
+
             DirectoryInfo? directory = new(Path.GetFullPath(startPath));
             while (directory is not null)
             {
@@ -459,6 +398,38 @@ internal static class Program
         }
 
         return Path.Combine(AppContext.BaseDirectory, "runtime", "ruffle-host");
+    }
+
+    /// <summary>
+    /// Deploys bundled plugins to the user's Skua plugins directory if newer.
+    /// </summary>
+    private static void EnsureBundledPluginsDeployed()
+    {
+        try
+        {
+            string? appDirectory = Path.GetDirectoryName(Environment.ProcessPath);
+            if (string.IsNullOrEmpty(appDirectory))
+                return;
+
+            string localPluginsDir = Path.Combine(appDirectory, "plugins");
+            if (!Directory.Exists(localPluginsDir))
+                return;
+
+            Directory.CreateDirectory(ClientFileSources.SkuaPluginsDIR);
+            foreach (string file in Directory.GetFiles(localPluginsDir, "*.dll"))
+            {
+                string dest = Path.Combine(ClientFileSources.SkuaPluginsDIR, Path.GetFileName(file));
+                if (!File.Exists(dest) || File.GetLastWriteTimeUtc(file) > File.GetLastWriteTimeUtc(dest))
+                {
+                    File.Copy(file, dest, true);
+                    HeadlessConsole.Debug($"[Plugin] Deployed bundled plugin: {Path.GetFileName(file)}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            HeadlessConsole.Warn($"[Plugin] Could not copy bundled plugins: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -484,31 +455,30 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine($"""
-            Headless Skua {Version}
+            Headless Skua {Version} (Pure Protocol Client)
 
             Usage:
               HeadlessSkua [command] [options]
 
             Commands:
               doctor             Check local runtime prerequisites.
-              run                Start the headless game runtime.
+              run                Start the headless pure protocol game client.
               -butler <user> [duration]
                                  Follow a player with ButlerV5; no duration means run until stopped.
               -butler stop        Stop the active headless ButlerV5 session.
 
             Run options:
-              --swf <path>       Path to the Skua bootstrap SWF (defaults to runtime game/skua.swf).
-              --game-version <r4|r8>
-                                 AQW game client build to load locally (default: r8).
-              --runtime-dir <path>
-                                 Ruffle host directory (defaults to runtime/ruffle-host).
-              --script <path>   Existing Skua C# script to execute after client initialization.
+              --account <name|#>, -a  Account name or saved account number to login.
+              --server <name|#>, -s   Server name or server list number to connect.
+              --password <pwd>, -p    Password (for manual account login).
+              --exit-after-login      Exit cleanly after successful login (for verification).
+              --script <path>         Existing Skua C# script to execute after login.
               --remote          Bind the web panel to 0.0.0.0 for trusted LAN/VPN access.
               --panel-port <port>
                                  Web panel port (default: 8788).
               --no-panel        Disable the web panel.
               --theme <name>    Console theme: midnight, ember, or neon.
-              --quiet           Hide Ruffle/browser and ActionScript trace noise.
+              --quiet           Hide verbose protocol packet logs.
               --no-color        Disable terminal colours.
 
             Remote panel:
@@ -526,17 +496,13 @@ internal static class Program
     /// </summary>
     private static void PrintDiagnostics()
     {
-        Console.WriteLine($"Headless Skua {Version}");
+        Console.WriteLine($"Headless Skua {Version} (Pure Protocol Client)");
         Console.WriteLine($"Operating system : {RuntimeInformation.OSDescription}");
         Console.WriteLine($"Architecture     : {RuntimeInformation.ProcessArchitecture}");
         Console.WriteLine($".NET runtime     : {Environment.Version}");
         Console.WriteLine($"Base directory   : {AppContext.BaseDirectory}");
-        string runtimeDirectory = GetDefaultRuntimeDirectory();
-        Console.WriteLine($"Ruffle directory : {runtimeDirectory}");
-        Console.WriteLine($"Ruffle JS        : {File.Exists(Path.Combine(runtimeDirectory, "ruffle", "ruffle.js"))}");
-        Console.WriteLine($"Skua SWF         : {File.Exists(Path.Combine(runtimeDirectory, "game", "skua.swf"))}");
-        Console.WriteLine($"Remote panel     : {File.Exists(Path.Combine(AppContext.BaseDirectory, "panel", "index.html"))}");
-        Console.WriteLine($"Playwright Node  : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "node", "win32_x64", "node.exe"))}");
-        Console.WriteLine($"Playwright CLI   : {File.Exists(Path.Combine(AppContext.BaseDirectory, ".playwright", "package", "cli.js"))}");
+        string panelDir = RemotePanelHost.ResolvePanelDirectory();
+        Console.WriteLine($"Remote panel     : {File.Exists(Path.Combine(panelDir, "index.html"))}");
+        Console.WriteLine($"Mode             : Socket-only (No Chromium / No Playwright / No Ruffle)");
     }
 }

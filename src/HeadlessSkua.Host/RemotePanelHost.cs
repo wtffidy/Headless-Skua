@@ -65,7 +65,7 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// Resolves panel assets beside the actual executable before checking runtime extraction and development paths.
     /// </summary>
     /// <returns>The first panel directory containing index.html, or the executable-relative default.</returns>
-    private static string ResolvePanelDirectory()
+    internal static string ResolvePanelDirectory()
     {
         string? executableDirectory = Path.GetDirectoryName(Environment.ProcessPath);
         List<string> candidates = new();
@@ -254,50 +254,43 @@ internal sealed class RemotePanelHost : IAsyncDisposable
                 ? acceptedAccount
                 : myAvatarAssigned ? TryReadStatusValue<string?>("account", () => _bot.Player.Username, null, warnedStatusFields) : null;
 
-            // Publish the authoritative login/world/avatar milestones before querying
-            // inventory, assets, health, or map details. Those deeper reads can lag behind
-            // avatar creation and must not leave the panel stuck on "Character: Pending".
-            GameStatusSnapshot baseSnapshot = new(
-                loggedIn,
-                worldLoaded,
-                avatarLoaded,
-                false,
-                false,
-                account,
-                server,
-                null,
-                false,
-                false,
-                null,
-                null);
-
-            lock (_statusSync)
-                _statusSnapshot = baseSnapshot;
+            GameStatusSnapshot previous = GetStatusSnapshot();
+            bool playerLoaded = false;
+            bool alive = false;
+            string? map = null;
+            bool mapLoading = false;
+            bool mapLoaded = false;
+            int? level = null;
+            int? gold = null;
 
             if (myAvatarAssigned)
             {
-                bool playerLoaded = TryReadStatusValue("player readiness", () => _bot.Player.Loaded, false, warnedStatusFields);
-                bool alive = TryReadStatusValue("player alive state", () => _bot.Player.Alive, false, warnedStatusFields);
-                string? map = TryReadStatusValue<string?>("map name", () => _bot.Map.Name, null, warnedStatusFields);
-                bool mapLoading = TryReadStatusValue("map loading state", () => _bot.Map.Loading, false, warnedStatusFields);
-                bool mapLoaded = TryReadStatusValue("map loaded state", () => _bot.Map.Loaded, false, warnedStatusFields);
-                int? level = TryReadStatusValue<int?>("player level", () => _bot.Player.Level, null, warnedStatusFields);
-                int? gold = TryReadStatusValue<int?>("player gold", () => _bot.Player.Gold, null, warnedStatusFields);
+                bool prevLoaded = previous.PlayerLoaded && worldLoaded;
+                bool prevAlive = previous.Alive && worldLoaded;
+                playerLoaded = TryReadStatusValue("player readiness", () => _bot.Player.Loaded, prevLoaded, warnedStatusFields);
+                alive = TryReadStatusValue("player alive state", () => _bot.Player.Alive, prevAlive, warnedStatusFields);
+                map = TryReadStatusValue<string?>("map name", () => _bot.Map.Name, previous.Map, warnedStatusFields);
+                mapLoading = TryReadStatusValue("map loading state", () => _bot.Map.Loading, false, warnedStatusFields);
+                mapLoaded = TryReadStatusValue("map loaded state", () => _bot.Map.Loaded, previous.MapLoaded, warnedStatusFields);
+                level = TryReadStatusValue<int?>("player level", () => _bot.Player.Level, previous.Level, warnedStatusFields);
+                gold = TryReadStatusValue<int?>("player gold", () => _bot.Player.Gold, previous.Gold, warnedStatusFields);
+            }
 
-                lock (_statusSync)
-                    _statusSnapshot = new GameStatusSnapshot(
-                        loggedIn,
-                        worldLoaded,
-                        avatarLoaded,
-                        playerLoaded,
-                        alive,
-                        account,
-                        server,
-                        map,
-                        mapLoaded,
-                        mapLoading,
-                        level,
-                        gold);
+            lock (_statusSync)
+            {
+                _statusSnapshot = new GameStatusSnapshot(
+                    loggedIn,
+                    worldLoaded,
+                    avatarLoaded,
+                    playerLoaded,
+                    alive,
+                    account,
+                    server,
+                    map,
+                    mapLoaded,
+                    mapLoading,
+                    level,
+                    gold);
             }
 
             try
@@ -318,8 +311,18 @@ internal sealed class RemotePanelHost : IAsyncDisposable
     /// <returns>True when the local character exists in the current world.</returns>
     private bool IsLocalAvatarInCollection()
     {
-        List<bool> localAvatarFlags = _bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
-        return localAvatarFlags.Contains(true);
+        try
+        {
+            if (_bot.Flash.IsNull("world.avatars"))
+                return false;
+
+            List<bool>? localAvatarFlags = _bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
+            return localAvatarFlags is not null && localAvatarFlags.Contains(true);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -566,15 +569,24 @@ internal sealed class RemotePanelHost : IAsyncDisposable
             _scriptManager.SilentConfig = true;
             Exception? exception = await _scriptManager.StartScript();
             if (exception is not null)
-                return Results.Problem($"The script failed to start: {exception.Message}");
+            {
+                string message = string.IsNullOrWhiteSpace(exception.Message)
+                    ? exception.ToString()
+                    : exception.Message;
+                HeadlessConsole.Error($"Remote script start failed: {message}");
+                return Results.Problem($"The script failed to start: {message}");
+            }
 
             HeadlessConsole.Info($"Remote panel started script: {fullPath}");
             return Results.Ok(new { message = "Script started.", path = fullPath });
         }
         catch (Exception exception)
         {
-            HeadlessConsole.Error($"Remote script start failed: {exception.Message}");
-            return Results.Problem($"The script could not be started: {exception.Message}");
+            string message = string.IsNullOrWhiteSpace(exception.Message)
+                ? exception.ToString()
+                : exception.Message;
+            HeadlessConsole.Error($"Remote script start failed: {message}");
+            return Results.Problem($"The script could not be started: {message}");
         }
     }
 

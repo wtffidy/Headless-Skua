@@ -23,6 +23,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify VibeSkua submodule checkout
+        shell: pwsh
+        run: |
+          $expected = "0cdcc8fea81fc7417527c5814e6a670f42c34ca1"
+          $actual = (git -C vendor/VibeSkua rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "VibeSkua submodule was not checked out." }
+          if ($actual -ne $expected) { throw "Unexpected VibeSkua revision: $actual (expected $expected)." }
+
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -34,14 +42,6 @@ jobs:
       - name: Build
         run: dotnet build HeadlessSkua.sln --configuration Release --no-restore
 
-      - name: Install Playwright Chromium
-        shell: pwsh
-        run: ./src/HeadlessSkua.Host/bin/Release/net10.0/playwright.ps1 install chromium
-
-      - name: Install Ruffle Web runtime
-        shell: pwsh
-        run: ./runtime/ruffle-host/Install-Runtime.ps1
-
       - name: Check host diagnostics
         run: dotnet run --project src/HeadlessSkua.Host --configuration Release --no-build -- doctor
 
@@ -52,18 +52,7 @@ jobs:
           dotnet publish src/HeadlessSkua.Host/HeadlessSkua.Host.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=embedded -o $publishDir
           if ($LASTEXITCODE -ne 0) { throw "Publishing the standalone host failed." }
 
-          $driverSource = "src/HeadlessSkua.Host/bin/Release/net10.0/.playwright"
-          if (-not (Test-Path (Join-Path $driverSource "node/win32_x64/node.exe"))) { throw "Playwright Node driver is missing from the build output." }
-          if (-not (Test-Path (Join-Path $driverSource "package/cli.js"))) { throw "Playwright CLI is missing from the build output." }
-          $publishedDriver = Join-Path $publishDir ".playwright"
-          $publishedRuntime = Join-Path $publishDir "runtime/ruffle-host"
-          New-Item -ItemType Directory -Path $publishedDriver -Force | Out-Null
-          New-Item -ItemType Directory -Path $publishedRuntime -Force | Out-Null
-          Copy-Item (Join-Path $driverSource "*") $publishedDriver -Recurse -Force
-          Copy-Item "runtime/ruffle-host/*" $publishedRuntime -Recurse -Force
-
           if (-not (Test-Path (Join-Path $publishDir "panel/index.html"))) { throw "Remote panel assets were not published." }
-          if (-not (Test-Path (Join-Path $publishDir ".playwright/node/win32_x64/node.exe"))) { throw "Published Playwright Node driver is missing." }
           & (Join-Path $publishDir "HeadlessSkua.exe") doctor
           if ($LASTEXITCODE -ne 0) { throw "Published host diagnostics failed." }
 
@@ -83,7 +72,17 @@ jobs:
 
             while ([DateTime]::UtcNow -lt $deadline) {
               if ($process.HasExited) {
-                throw "Headless Skua exited before the panel API became available."
+                $process.WaitForExit()
+                Write-Host "Headless Skua exited before the panel API became available (exit code $($process.ExitCode))."
+                if (Test-Path $stdout) {
+                  Write-Host "--- Headless Skua stdout ---"
+                  Get-Content $stdout
+                }
+                if (Test-Path $stderr) {
+                  Write-Host "--- Headless Skua stderr ---"
+                  Get-Content $stderr
+                }
+                throw "Headless Skua exited before the panel API became available (exit code $($process.ExitCode))."
               }
 
               try {
@@ -189,7 +188,7 @@ jobs:
             if (-not $started) {
               if (Test-Path $stdout) { Get-Content $stdout }
               if (Test-Path $stderr) { Get-Content $stderr }
-              throw "The Skua SWF or existing Skua script engine did not initialize in headless Chromium within 90 seconds."
+              throw "The pure-protocol Skua script engine did not initialize within 90 seconds."
             }
           }
           finally {

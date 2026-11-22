@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using HeadlessSkua.Protocol;
 using Skua.Core.Interfaces;
 using Skua.Core.Models;
 using Skua.Core.Models.Servers;
@@ -13,6 +14,120 @@ namespace HeadlessSkua;
 /// </summary>
 internal static class HeadlessLoginFlow
 {
+    /// <summary>
+    /// Authenticates an account via the AQW Web API and connects directly to the game server via TCP protocol.
+    /// </summary>
+    public static async Task<bool> LoginProtocolAsync(
+        IScriptInterface bot,
+        AqwProtocolSession session,
+        HeadlessSessionState sessionState,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        string? requestedAccount = GetOption(args, "--account") ?? GetOption(args, "-a") ?? GetOption(args, "--user") ?? GetOption(args, "-u");
+        string? requestedPassword = GetOption(args, "--password") ?? GetOption(args, "-p");
+        string? requestedServer = GetOption(args, "--server") ?? GetOption(args, "-s");
+
+        (string username, string password) = SelectAccount(bot, requestedAccount, requestedPassword);
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
+        {
+            HeadlessConsole.Error("A username and password are required.");
+            return false;
+        }
+
+        HeadlessConsole.Info($"[Protocol] Authenticating {username} via AQW Web API...");
+        AqwLoginResult authResult = await AqwAuthClient.LoginAsync(username, password, cancellationToken);
+        if (!authResult.Success || string.IsNullOrEmpty(authResult.Token))
+        {
+            HeadlessConsole.Error($"[Protocol] Authentication failed: {authResult.Message}");
+            return false;
+        }
+
+        HeadlessConsole.Success($"[Protocol] Authenticated successfully as {authResult.Username ?? username} (UserID: {authResult.UserId}).");
+
+        List<Server> selectableServers = authResult.Servers
+            .Where(server => !string.IsNullOrWhiteSpace(server.Name) && !string.IsNullOrWhiteSpace(server.IP) && server.Online)
+            .OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (selectableServers.Count == 0)
+        {
+            HeadlessConsole.Error("[Protocol] No online servers returned by AQW API.");
+            return false;
+        }
+
+        session.State.Servers = selectableServers;
+
+        Server? selectedServer = null;
+        if (!string.IsNullOrWhiteSpace(requestedServer))
+        {
+            if (int.TryParse(requestedServer, out int sel) && sel >= 1 && sel <= selectableServers.Count)
+            {
+                selectedServer = selectableServers[sel - 1];
+            }
+            else
+            {
+                selectedServer = selectableServers.FirstOrDefault(s =>
+                    string.Equals(s.Name, requestedServer, StringComparison.OrdinalIgnoreCase))
+                    ?? selectableServers.FirstOrDefault(s =>
+                    s.Name.Contains(requestedServer, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (selectedServer is not null)
+            {
+                HeadlessConsole.Info($"Selected server target: {selectedServer.Name} ({selectedServer.IP}) via CLI option.");
+            }
+            else
+            {
+                HeadlessConsole.Warn($"Server '{requestedServer}' was not found in available servers. Falling back to selection prompt.");
+            }
+        }
+
+        if (selectedServer is null)
+        {
+            HeadlessConsole.Info($"Available servers: {selectableServers.Count}");
+            for (int index = 0; index < selectableServers.Count; index++)
+            {
+                Server server = selectableServers[index];
+                string memberOnly = server.Upgrade ? " [MEMBER]" : string.Empty;
+                string population = server.MaxPlayers > 0 ? $" [{server.PlayerCount}/{server.MaxPlayers}]" : string.Empty;
+                Console.WriteLine($"  {index + 1,2}. {server.Name}{memberOnly}{population}");
+            }
+
+            while (selectedServer is null && !cancellationToken.IsCancellationRequested)
+            {
+                string? input = HeadlessConsole.Prompt($"Select server [1-{selectableServers.Count}]");
+                if (string.IsNullOrWhiteSpace(input))
+                    continue;
+
+                if (int.TryParse(input, out int selection) && selection >= 1 && selection <= selectableServers.Count)
+                    selectedServer = selectableServers[selection - 1];
+                else
+                    HeadlessConsole.Warn($"Enter a number between 1 and {selectableServers.Count}.");
+            }
+        }
+
+        if (selectedServer is null)
+            return false;
+
+        bot.Servers.LastIP = selectedServer.IP;
+        bot.Servers.LastName = selectedServer.Name;
+
+        bool connected = await session.ConnectAndLoginAsync(
+            selectedServer,
+            authResult.Token,
+            authResult.Username ?? username,
+            cancellationToken);
+
+        if (connected)
+        {
+            sessionState.SetLoginState(true, username);
+            return true;
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Authenticates an account and connects it to a server selected in the terminal.
     /// </summary>
@@ -128,19 +243,8 @@ internal static class HeadlessLoginFlow
         bool selectedInClient = false;
         try
         {
-            if (bot.Flash is RuffleFlashUtil flashUtil)
-            {
-                // Queue the ActionScript callback and return immediately. A synchronous
-                // ExternalInterface call can remain blocked while AQW starts its socket handshake.
-                flashUtil.DispatchActionScript("connectToServer", serverData);
-                selectedInClient = true;
-                HeadlessConsole.Debug("AQW direct server bridge request queued asynchronously.");
-            }
-            else
-            {
-                selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
-                HeadlessConsole.Debug($"AQW direct server bridge returned: {selectedInClient}.");
-            }
+            selectedInClient = bot.Flash.Call<bool>("connectToServer", serverData);
+            HeadlessConsole.Debug($"AQW direct server bridge returned: {selectedInClient}.");
         }
         catch (Exception exception)
         {
@@ -307,11 +411,21 @@ internal static class HeadlessLoginFlow
     /// <returns>True when the local character is present in the current game world.</returns>
     private static bool IsAvatarPresent(IScriptInterface bot)
     {
-        if (!bot.Flash.IsNull("world.myAvatar"))
-            return true;
+        try
+        {
+            if (!bot.Flash.IsNull("world.myAvatar"))
+                return true;
 
-        List<bool> localAvatarFlags = bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
-        return localAvatarFlags.Contains(true);
+            if (bot.Flash.IsNull("world.avatars"))
+                return false;
+
+            List<bool>? localAvatarFlags = bot.Flash.SelectArrayObjects<bool>("world.avatars", "isMyAvatar");
+            return localAvatarFlags is not null && localAvatarFlags.Contains(true);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -461,9 +575,46 @@ internal static class HeadlessLoginFlow
         return false;
     }
 
-    private static (string Username, string Password) SelectAccount(IScriptInterface bot)
+    private static (string Username, string Password) SelectAccount(
+        IScriptInterface bot,
+        string? requestedAccount = null,
+        string? requestedPassword = null)
     {
         List<ManagedAccount> accounts = bot.Accounts.GetAllAccounts();
+
+        if (!string.IsNullOrWhiteSpace(requestedAccount))
+        {
+            ManagedAccount? matched = null;
+            if (int.TryParse(requestedAccount, out int sel) && sel >= 1 && sel <= accounts.Count)
+            {
+                matched = accounts[sel - 1];
+            }
+            else
+            {
+                matched = accounts.FirstOrDefault(a =>
+                    string.Equals(a.Username, requestedAccount, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.DisplayName, requestedAccount, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (matched is not null)
+            {
+                string storedPassword = matched.Password ?? string.Empty;
+                string password = storedPassword.StartsWith("enc:", StringComparison.Ordinal)
+                    ? CryptoUtils.Decrypt(storedPassword)
+                    : storedPassword;
+                HeadlessConsole.Info($"Selected account '{matched.DisplayName ?? matched.Username}' from saved accounts.");
+                return (matched.Username ?? string.Empty, password);
+            }
+
+            if (!string.IsNullOrEmpty(requestedPassword))
+            {
+                HeadlessConsole.Info($"Using credentials for account '{requestedAccount}'.");
+                return (requestedAccount, requestedPassword);
+            }
+
+            HeadlessConsole.Warn($"Account '{requestedAccount}' was not found in saved accounts. Falling back to selection prompt.");
+        }
+
         if (accounts.Count > 0)
         {
             HeadlessConsole.Info($"Found {accounts.Count} account(s) saved in VibeSkua Manager.");
@@ -498,6 +649,15 @@ internal static class HeadlessLoginFlow
         string? username = HeadlessConsole.Prompt("Username");
         string passwordInput = HeadlessConsole.ReadSecret("Password");
         return (username?.Trim() ?? string.Empty, passwordInput);
+    }
+
+    private static string? GetOption(string[] args, string option)
+    {
+        for (int index = 0; index < args.Length - 1; index++)
+            if (string.Equals(args[index], option, StringComparison.OrdinalIgnoreCase))
+                return args[index + 1];
+
+        return null;
     }
 
 }
