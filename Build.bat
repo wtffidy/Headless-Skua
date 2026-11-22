@@ -10,15 +10,17 @@ set "PROJECT=src\HeadlessSkua.Host\HeadlessSkua.Host.csproj"
 set "CONFIGURATION=Release"
 set "RUNTIME=win-x64"
 
-echo [0/8] Closing any running Headless Skua instances...
+echo [0/6] Closing any running Headless Skua instances...
 taskkill /F /T /IM HeadlessSkua.exe >nul 2>nul
-timeout /t 1 /nobreak >nul
+ping 127.0.0.1 -n 2 >nul
 
 echo.
 echo  ==========================================
 echo           HEADLESS SKUA - BUILD
 echo  ==========================================
 echo.
+
+if exist "%ProgramFiles%\dotnet\dotnet.exe" set "PATH=%ProgramFiles%\dotnet;%PATH%"
 
 where dotnet >nul 2>nul
 if errorlevel 1 (
@@ -39,17 +41,22 @@ if errorlevel 1 (
     goto :failed
 )
 
-echo [1/8] Pulling the latest Headless Skua changes...
-git pull --ff-only
-if errorlevel 1 (
-    echo [ERROR] Could not update the repository. Check for local changes or a diverged branch.
-    goto :failed
-)
+if exist ".git" (
+    echo [1/6] Pulling the latest Headless Skua changes...
+    git pull --ff-only
+    if errorlevel 1 (
+        echo [ERROR] Could not update the repository. Check for local changes or a diverged branch.
+        goto :failed
+    )
 
-echo.
-echo [2/8] Initializing and updating VibeSkua source...
-git submodule update --init --recursive
-if errorlevel 1 goto :failed
+    echo.
+    echo [2/6] Initializing and updating VibeSkua source...
+    git submodule update --init --recursive
+    if errorlevel 1 goto :failed
+) else (
+    echo [1/6] Skipping git pull - no .git directory found.
+    echo [2/6] Using existing VibeSkua source...
+)
 
 if not exist "vendor\VibeSkua\Skua.Core\Skua.Core.csproj" (
     echo [ERROR] VibeSkua submodule was not initialized correctly.
@@ -57,68 +64,19 @@ if not exist "vendor\VibeSkua\Skua.Core\Skua.Core.csproj" (
 )
 
 echo.
-echo [3/8] Restoring solution...
+echo [3/6] Restoring solution...
 dotnet restore HeadlessSkua.sln
 if errorlevel 1 goto :failed
 
 echo.
-echo [4/8] Building solution...
+echo [4/6] Building solution...
 dotnet build HeadlessSkua.sln --configuration %CONFIGURATION% --no-restore
 if errorlevel 1 goto :failed
 
-set "PLAYWRIGHT_SCRIPT=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0\playwright.ps1"
-if not exist "%PLAYWRIGHT_SCRIPT%" (
-    echo [ERROR] Playwright install script was not generated.
-    goto :failed
-)
-
-where pwsh >nul 2>nul
-if not errorlevel 1 (
-    set "POWERSHELL=pwsh"
-) else (
-    set "POWERSHELL=powershell"
-)
-
 echo.
-echo [5/8] Installing headless Chromium...
-%POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "%PLAYWRIGHT_SCRIPT%" install chromium
-if errorlevel 1 goto :failed
-
-echo.
-echo [6/8] Installing Ruffle and the Skua game client...
-%POWERSHELL% -NoProfile -ExecutionPolicy Bypass -File "runtime\ruffle-host\Install-Runtime.ps1"
-if errorlevel 1 goto :failed
-
-echo.
-echo Copying runtime assets into the Visual Studio build output...
-set "DEV_OUTPUT_DIR=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0"
-if exist "%DEV_OUTPUT_DIR%\runtime\ruffle-host" rmdir /s /q "%DEV_OUTPUT_DIR%\runtime\ruffle-host"
-xcopy "runtime\ruffle-host" "%DEV_OUTPUT_DIR%\runtime\ruffle-host\" /E /I /Y >nul
-if errorlevel 1 goto :failed
-
-echo.
-echo [7/8] Publishing standalone Windows build...
+echo [5/6] Publishing standalone Windows build...
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
 dotnet publish "%PROJECT%" --configuration %CONFIGURATION% --runtime %RUNTIME% --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=embedded -o "%OUTPUT_DIR%"
-if errorlevel 1 goto :failed
-
-echo.
-echo Copying Playwright driver files...
-set "PLAYWRIGHT_DRIVER_DIR=src\HeadlessSkua.Host\bin\%CONFIGURATION%\net10.0\.playwright"
-if not exist "%PLAYWRIGHT_DRIVER_DIR%\node\win32_x64\node.exe" (
-    echo [ERROR] Playwright Node driver was not found in the build output.
-    goto :failed
-)
-if not exist "%PLAYWRIGHT_DRIVER_DIR%\package\cli.js" (
-    echo [ERROR] Playwright CLI entry point was not found in the build output.
-    goto :failed
-)
-xcopy "%PLAYWRIGHT_DRIVER_DIR%" "%OUTPUT_DIR%\.playwright\" /E /I /Y >nul
-if errorlevel 1 goto :failed
-
-echo.
-echo Copying Ruffle runtime and game files...
-xcopy "runtime\ruffle-host" "%OUTPUT_DIR%\runtime\ruffle-host\" /E /I /Y >nul
 if errorlevel 1 goto :failed
 
 if not exist "%OUTPUT_DIR%\HeadlessSkua.exe" (
@@ -132,7 +90,7 @@ if not exist "%OUTPUT_DIR%\panel\index.html" (
 )
 
 echo.
-echo [8/8] Checking published installation...
+echo [6/6] Checking published installation...
 "%OUTPUT_DIR%\HeadlessSkua.exe" doctor
 if errorlevel 1 goto :failed
 

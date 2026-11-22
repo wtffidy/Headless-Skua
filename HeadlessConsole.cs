@@ -326,6 +326,19 @@ public static class HeadlessConsole
             _ => ("ERR", _theme.Error)
         };
 
+        if (message.Contains('\n'))
+        {
+            string[] lines = message.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                Write(i == 0
+                    ? $"{ClearLine}{_theme.Muted.Fg}{DateTime.Now:HH:mm:ss} {color.Fg}{Bold}{tag}{Reset} {_theme.Muted.Fg}│{Reset} {_theme.Text.Fg}{line}{Reset}"
+                    : $"{ClearLine}{_theme.Muted.Fg}{DateTime.Now:HH:mm:ss} {color.Fg}{Bold}{tag}{Reset} {_theme.Muted.Fg}│{Reset}   {_theme.Text.Fg}{line}{Reset}");
+            }
+            return;
+        }
+
         Write($"{ClearLine}{_theme.Muted.Fg}{DateTime.Now:HH:mm:ss} {color.Fg}{Bold}{tag}{Reset} {_theme.Muted.Fg}│{Reset} {_theme.Text.Fg}{message}{Reset}");
     }
 
