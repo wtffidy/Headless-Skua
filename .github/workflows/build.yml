@@ -72,7 +72,17 @@ jobs:
 
             while ([DateTime]::UtcNow -lt $deadline) {
               if ($process.HasExited) {
-                throw "Headless Skua exited before the panel API became available."
+                $process.WaitForExit()
+                Write-Host "Headless Skua exited before the panel API became available (exit code $($process.ExitCode))."
+                if (Test-Path $stdout) {
+                  Write-Host "--- Headless Skua stdout ---"
+                  Get-Content $stdout
+                }
+                if (Test-Path $stderr) {
+                  Write-Host "--- Headless Skua stderr ---"
+                  Get-Content $stderr
+                }
+                throw "Headless Skua exited before the panel API became available (exit code $($process.ExitCode))."
               }
 
               try {
